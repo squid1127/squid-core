@@ -37,6 +37,8 @@ class Bot(commands.Bot):
         # Cogs
         asyncio.run(self._load_cogs())
 
+        print(f"[Core] {self.name.title()} bot initialized")
+
     def add_db(
         self,
         postgres_connection: str,
@@ -58,6 +60,7 @@ class Bot(commands.Bot):
         self.has_db = True
         self.db = DatabaseCore(
             self,
+            shell=self.shell,
             postgres_connection=postgres_connection,
             postgres_password=postgres_password,
             postgres_pool=postgres_pool,
@@ -65,9 +68,17 @@ class Bot(commands.Bot):
 
         # Add the database handler
         try:
-            asyncio.run(self.add_cog(DatabaseHandler(self, self.db, self.shell)))
-        except:
-            print("[Core] Failed to add database handler")
+            asyncio.run(
+                self.add_cog(
+                    DatabaseHandler(
+                        self,
+                        self.db,
+                        self.shell,
+                    )
+                )
+            )
+        except Exception as e:
+            print(f"[Core] Failed to add database handler: {e}")
 
     def run(self):
         """Start the bot"""
@@ -80,4 +91,3 @@ class Bot(commands.Bot):
     async def on_ready(self):
         """On ready message"""
         print(f"[Core] {self.user} is ready")
-        

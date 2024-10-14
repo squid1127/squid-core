@@ -2,7 +2,6 @@ import asyncio
 import discord
 from discord.ext import commands
 
-
 class ShellCore:
     """
     Core shell functionality for the bot. Contains methods for sending messages in the shell channel, as well as attributes for the bot, channel, interactive mode, and name
@@ -14,9 +13,9 @@ class ShellCore:
         self.channel_id = channel_id
         self.interactive_mode = None
         self.name = name
-        
+
         self.commands = []
-        
+
         self.presets = {
             "CogNoCommandError": {
                 "title": "Command Error",
@@ -42,13 +41,35 @@ class ShellCore:
         except:
             print("[Core.Shell] Shell channel not found!")
             return
-        
-    def add_command(self, command: str, cog: str, description: str):
-        self.commands.append(ShellCommandEntry(command, cog, description))
+
+    def add_command(
+        self,
+        command: str = None,
+        cog: str = None,
+        description: str = None,
+        entry: "ShellCommandEntry" = None,
+        **kwargs,
+    ):
+        """
+        Adds a command to the shell's command list.
+        This method can either take a pre-constructed `ShellCommandEntry` object
+        or the individual components of a command to create a new `ShellCommandEntry`.
+        Args:
+            entry (ShellCommandEntry, optional): A pre-constructed command entry. Defaults to None.
+            command (str, optional): The command string. Defaults to None.
+            cog (str, optional): The cog associated with the command. Defaults to None.
+            description (str, optional): A brief description of the command. Defaults to None.
+            **kwargs: Additional keyword arguments to be passed to the `ShellCommandEntry` constructor.
+        """
+
+        if entry:
+            self.commands.append(entry)
+        else:
+            self.commands.append(ShellCommandEntry(command, cog, description, **kwargs))
 
     async def create_embed(
         self,
-        message: str=None,
+        message: str = None,
         title: str = None,
         msg_type: str = "info",
         cog: str = None,
@@ -83,14 +104,37 @@ class ShellCore:
     # Send a log message
     async def log(
         self,
-        message: str=None,
+        message: str = None,
         title: str = None,
         msg_type: str = "info",
         cog: str = None,
         plain_text: str = None,
         preset: str = None,
         edit: discord.Message = None,
-    ):  
+    ):
+        """
+        Logs a message to a Discord channel with an optional embed.
+        Parameters:
+        -----------
+        message : str, optional
+            The main content of the log message.
+        title : str, optional
+            The title of the embed.
+        msg_type : str, default "info"
+            The type of the message (e.g., "info", "warning", "error", "fatal_error").
+        cog : str, optional
+            The name of the cog from which the log is being sent.
+        plain_text : str, optional
+            Plain text content to send instead of the embed.
+        preset : str, optional
+            Preset configuration for the embed.
+        edit : discord.Message, optional
+            A Discord message object to edit instead of sending a new message.
+        Returns:
+        --------
+        discord.Message
+            The Discord message object that was sent or edited.
+        """        
         embed = await self.create_embed(
             message=message,
             title=title,
@@ -98,7 +142,7 @@ class ShellCore:
             cog=cog,
             preset=preset,
         )
-        
+
         if edit:
             msg_object = await edit.edit(
                 content=(
@@ -109,7 +153,7 @@ class ShellCore:
                 embed=embed,
             )
             return msg_object
-        
+
         msg_object = await self.channel.send(
             (
                 plain_text
@@ -132,7 +176,7 @@ class ShellCommand:
         shell: ShellCore,
         channel: discord.TextChannel = None,
         query: str = None,
-        message: discord.Message = None
+        message: discord.Message = None,
     ):
         self.name = name
         self.cog = cog
@@ -143,14 +187,46 @@ class ShellCommand:
             self.channel = channel
         else:
             self.channel = self.core.channel
-            
+
     def __call__(self):
         return (self.name, self.query)
+    
+    def params_to_dict(self, params: str):
+        if params is None:
+            params = self.query
+        params = params.split(" ")
+        previous = None
+        params_dict = {}
+        for param in params:
+            if param.startswith("--"):
+                if previous:
+                    params_dict[previous] = True
+                if params_dict.get(param):
+                    raise SyntaxError(f"Duplicate parameter: {param}")
+                previous = param
+            elif param.startswith("-"):
+                if previous:
+                    params_dict[previous] = True
+                if params_dict.get(param[:2]):
+                    raise SyntaxError(f"Duplicate parameter: {param}")
+                previous = param[:2]
+                if len(param) > 2:
+                    raise SyntaxError(f"Invalid parameter: {param}")
 
+            elif previous:
+                params_dict[previous] = param
+                previous = None
+            else:
+                raise SyntaxError(f"Invalid parameter: {param}")
+            
+        if previous:
+            params_dict[previous] = True
+            
+        return params_dict
     async def log(
         self,
-        description: str= None,
-        title: str= None,
+        description: str = None,
+        title: str = None,
         fields: list = None,
         footer: str = None,
         msg_type: str = "info",
@@ -162,7 +238,7 @@ class ShellCommand:
         Args:
             description (str): The description text for the embed.
             title (str): The title of the embed.
-            fields (list, optional): A list of dictionaries representing fields to add to the embed. 
+            fields (list, optional): A list of dictionaries representing fields to add to the embed.
                                      Each dictionary should have 'name' and 'value' keys, and optionally an 'inline' key.
             footer (str, optional): The footer text for the embed.
             msg_type (str, optional): The type of message, which determines the embed color. Defaults to "info".
@@ -170,7 +246,9 @@ class ShellCommand:
         Returns:
             discord.Message: The message object that was sent or edited.
         """
-        embed = await self.core.create_embed(description, title, msg_type, self.cog, preset=preset)
+        embed = await self.core.create_embed(
+            description, title, msg_type, self.cog, preset=preset
+        )
         if fields:
             for field in fields:
                 embed.add_field(
@@ -185,22 +263,49 @@ class ShellCommand:
         else:
             msg_object = await self.channel.send(embed=embed)
         return msg_object
-    
-
+    async def raw(self, message: str, edit: discord.Message = None):
+        """
+        Sends a raw message to the shell channel.
+        Args:
+            message (str): The message to send.
+        Returns:
+            discord.Message: The message object that was sent.
+        """
+        if edit:
+            msg_object = await edit.edit(content=message)
+        else:
+            msg_object = await self.channel.send(message)
+        return msg_object
 
 class ShellCommandEntry:
     """
-    A class to represent a shell command entry for command parsing. Contains attributes for the command, cog, and description
+    ShellCommandEntry class represents a shell command entry with its associated metadata.
+    Attributes:
+        command (str): The command string.
+        cog (str): The cog (category) to which the command belongs.
+        description (str): A brief description of the command.
+        callback (callable, optional): An optional callback function to be executed when the command is invoked.
+    Methods:
+        __init__(command: str, cog: str, description: str, callback: callable = None):
+            Initializes a new instance of the ShellCommandEntry class.
+        __str__():
+            Returns a string representation of the shell command entry.
     """
 
-    def __init__(self, command: str, cog: str, description: str):
+    def __init__(
+        self,
+        command: str,
+        cog: str,
+        description: str,
+        callback: callable = None,
+    ):
         self.command = command
         self.cog = cog
         self.description = description
+        self.callback = callback
 
     def __str__(self):
         return f"`{self.command}` - {self.description}"
-
 
 class ShellHandler(commands.Cog):
     def __init__(self, bot: commands.Bot, core: ShellCore):
@@ -210,12 +315,20 @@ class ShellHandler(commands.Cog):
         # Ingreated commands
         self.core.add_command("status", "ShellHandler", "Check the status of the bot")
         self.core.add_command("help", "ShellHandler", "Show this help message")
-        self.core.add_command("count", "ShellHandler", "A random command that counts up to a number")
-        
+        self.core.add_command(
+            "count", "ShellHandler", "A random command that counts up to a number"
+        )
+
         # Debug commands
-        self.core.add_command("debug-nocog", "NotACog", "A command inside a non-existent cog")
-        self.core.add_command("debug-nocommand", "ShellHandler", "A command that does not exist in the cog")
-        
+        self.core.add_command(
+            "debug-nocog", "NotACog", "A command inside a non-existent cog"
+        )
+        self.core.add_command(
+            "debug-nocommand",
+            "ShellHandler",
+            "A command that does not exist in the cog",
+        )
+
     @commands.Cog.listener()
     async def on_ready(self):
         """Start the shell"""
@@ -247,14 +360,12 @@ class ShellHandler(commands.Cog):
             command = "help"
 
         # Find the command in the command list
-        commandEntry = None
+        # print(self.core.commands)
         for cmd in self.core.commands:
             if cmd.command == command:
                 commandEntry: ShellCommandEntry = cmd
                 break
-
-        # Check if the command is found
-        if not commandEntry:
+        else:
             await self.core.log(
                 f"Command `{command}` not found, use `{self.core.name.lower()} help` to see available commands.",
                 title="Command Not Found",
@@ -273,7 +384,10 @@ class ShellHandler(commands.Cog):
 
         # Execute the command
         try:
-            await self.bot.cogs[commandEntry.cog].shell_callback(commandClass)
+            if commandEntry.callback:
+                await commandEntry.callback(commandClass)
+            else:
+                await self.bot.cogs[commandEntry.cog].shell_callback(commandClass)
         except KeyError:
             await self.core.log(
                 f"Command `{command}` is registered, but its cog ({commandEntry.cog}) cannot be found.",
@@ -302,7 +416,7 @@ class ShellHandler(commands.Cog):
         if command.name == "status":
             print("[Core.ShellHandler] Status command called")
             # Run cog_check on all cogs
-            edit = await command.log(   
+            edit = await command.log(
                 f"{self.bot.user.name.title()} is currently online and operational.\n\nChecking cogs...",
                 title="Bot Status",
                 msg_type="info",
@@ -316,7 +430,9 @@ class ShellHandler(commands.Cog):
                     print(f"[Core.ShellHandler] Cog {cog} is {check}")
                 except AttributeError:
                     fields.append({"name": cog, "value": "Status unknown"})
-                    print(f"[Core.ShellHandler] Cog {cog} status unknown (no cog_status method)")
+                    print(
+                        f"[Core.ShellHandler] Cog {cog} status unknown (no cog_status method)"
+                    )
 
             await command.log(
                 f"{self.bot.user.name.title()} is currently online and operational.",
@@ -330,13 +446,14 @@ class ShellHandler(commands.Cog):
             # Show help message
             fields = [
                 {
-                    "name":"Running Commands",
-                    "value": f"To run a command, type `{self.core.name.lower()} <command>` in the shell channel (this channel)."
+                    "name": "Running Commands",
+                    "value": f"To run a command, type `{self.core.name.lower()} <command>` in the shell channel (this channel).",
                 },
                 {
-                    "name":"Commands",
-                    "value": "- " + "\n- ".join([str(cmd) for cmd in self.core.commands])
-                }
+                    "name": "Commands",
+                    "value": "- "
+                    + "\n- ".join([str(cmd) for cmd in self.core.commands]),
+                },
             ]
             edit = await command.log(
                 f"Use this shell to manage bot and view logs",
@@ -378,7 +495,7 @@ class ShellHandler(commands.Cog):
                     break
 
             return
-        
+
         await command.log(preset="CogNoCommandError")
 
     async def cog_status(self):
