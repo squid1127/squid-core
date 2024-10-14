@@ -13,13 +13,69 @@ import asyncio
 # Typing
 from typing import Literal
 
+# Managing time
+import time
+import datetime
 
 class DatabaseTable:
     def __init__(self, schema: "DatabaseSchema", name: str):
         self.schema = schema
         self.name = name
         self.columns = []
+        self.data = []
         
+        self.last_fetch = None
+        # Setup default fetch interval values
+        self.configure()
+        
+    def configure(self, fetch_interval_minutes: int = 15):
+        """
+        Configures the periodic fetch behavior of the database table.
+        Args:
+            fetch_interval_minutes (int): The interval in minutes for fetching data. 
+                                          If set to 0, periodic fetching is disabled.
+        Sets:
+            self.do_periodic_fetch (bool): Indicates whether periodic fetching is enabled.
+            self.fetch_interval (int): The interval in minutes for fetching data, if periodic fetching is enabled.
+        """
+        
+        if fetch_interval_minutes == 0:
+            self.do_periodic_fetch = False
+        else:
+            self.do_periodic_fetch = True
+            self.fetch_interval = fetch_interval_minutes
+            
+    async def get_data(self):
+        """
+        Asynchronously retrieves data for the database schema and name.
+        This method checks if the data is stale or if it has never been fetched before.
+        If the data is stale or has never been fetched, it fetches all data.
+        Otherwise, it returns the cached data.
+        Returns:
+            The data for the database schema and name, either fetched or cached.
+        """
+        
+        print(f"[Core.Database] Data requested for {self.schema} -> {self.name}")
+        if self.last_fetch is None:
+            print(f"[Core.Database] Fetching all data for {self.schema} -> {self.name}")
+            return await self.fetch_all()
+        
+        # Check if the data is stale
+        if time.time() - self.last_fetch > self.fetch_interval * 60:
+            print(f"[Core.Database] Data stale for {self.schema} -> {self.name}")
+            return await self.fetch_all()
+        
+        print(f"[Core.Database] Using cached data for {self.schema} -> {self.name}")
+        return self.data
+            
+    async def fetch_all(self):
+        """Retrieve all data from the database"""
+        result = await self.schema.db.core.query(f"SELECT * FROM '{self.schema}'.'{self}'")
+        self.data = self.schema.db.core.table_to_list_dict(result)
+        
+        self.last_fetch = time.time()
+        return self.data
+
     async def get_columns(self):
         """Get all columns in the table"""
         result = await self.schema.db.core.query(
@@ -32,16 +88,27 @@ class DatabaseTable:
 
         self.columns = self.schema.db.core.table_to_list_dict(result)
         return self.columns
-    
-    async def get_everything(self):
-        """Get all columns"""
-        print(f"[Core.Database] Get everything -> {self.schema} -> {self.name}")
-        await self.get_columns()
-        return self
 
-    def __str__(self) -> str:
-        return f"{self.schema}.{self.name}"
+    async def index_all(self):
+        """Get all columns"""
+        print(f"[Core.Database] Indexing -> {self.schema} -> {self.name}")
+        await self.get_columns()
+        for column in self.columns:
+            print(
+                f"[Core.Database] Indexing -> {self.schema} -> {self.name} -> {column.get('column_name')}"
+            )
+        return self
     
+    def __str__(self) -> str:
+        return self.name
+
+    def __repr__(self) -> str:
+        f"DatabaseObject().get_schema('{self.schema}').get_table('{self.name}')"
+    
+    async def __call__(self):
+        return await self.get_data()
+        
+
 class DatabaseSchema:
     def __init__(self, db: "DatabaseObject", name: str):
         self.db = db
@@ -60,10 +127,10 @@ class DatabaseSchema:
         result = self.db.core.table_to_list_dict(
             await self.db.core.query(
                 f"""
-            SELECT table_name, table_schema
-            FROM information_schema.tables
-            WHERE table_schema = '{self.name}';
-            """
+                SELECT table_name, table_schema
+                FROM information_schema.tables
+                WHERE table_schema = '{self.name}';
+                """
             )
         )
 
@@ -96,13 +163,13 @@ class DatabaseSchema:
             if schema["schema_name"] == self.name:
                 return True
         return False
-    
-    async def get_everything(self):
+
+    async def index_all(self):
         """Get all tables"""
-        print(f"[Core.Database] Get everything -> {self.name}")
+        print(f"[Core.Database] Indexing -> {self.name}")
         await self.get_all_tables()
         for table in self.tables:
-            await self.tables[table].get_everything()
+            await self.tables[table].index_all()
 
     async def _add_table(self, name: str):
         """Add a table to the schema"""
@@ -115,9 +182,11 @@ class DatabaseSchema:
 
 
 class DatabaseObject:
-    def __init__(self, core: "DatabaseCore"):
+    def __init__(self, core: "DatabaseCore", ignore_schema: list = []):
         self.core = core
         self.schemas = {}
+
+        self.ignore = ignore_schema
 
     async def get_schema(self, name: str) -> DatabaseSchema:
         """Get a schema by name"""
@@ -148,16 +217,18 @@ class DatabaseObject:
 
         # Add all schemas to list
         for schema in result:
+            if schema["schema_name"] in self.ignore:
+                continue
             if not schema["schema_name"] in self.schemas:
                 self._add_schema(schema["schema_name"])
         return self.schemas
-    
-    async def get_everything(self):
+
+    async def index_all(self):
         """Get all schemas and tables"""
-        print("[Core.Database] Getting everything")
+        print("[Core.Database] Indexing")
         await self.get_all_schemas()
         for schema in self.schemas:
-            await self.schemas[schema].get_everything()
+            await self.schemas[schema].index_all()
 
     def _add_schema(self, name: str):
         """Add a schema to the database"""
@@ -182,7 +253,15 @@ class DatabaseCore:
         self.postgres_max_pool = postgres_pool
         self.pool = None
         self.working = False
-        self.data = DatabaseObject(self)
+        ignore = [
+            "pg_toast",
+            "pg_catalog",
+            "information_schema",
+            "__msar",
+            "msar",
+            "mathesar_types",
+        ]
+        self.data = DatabaseObject(self, ignore_schema=ignore)
 
     async def start(self) -> bool:
         """
@@ -385,9 +464,9 @@ class DatabaseHandler(commands.Cog):
                     cog="DatabaseHandler",
                 )
                 return
-                
-        print("[Core.Database] Database connected; fetching database schema")
-        await self.core.data.get_everything()
+
+        print("[Core.Database] Database connected; indexing")
+        await self.core.data.index_all()
         print("[Core.Database] Ready")
 
     # Cog Status
