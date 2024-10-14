@@ -6,9 +6,6 @@ from discord.ext import commands, tasks
 # Async Packages for discord & rest apis
 import asyncio
 
-# Supabase for database
-import supabase
-
 # * Internal Packages & Imports
 from .shell import ShellCore, ShellHandler, ShellCommand  # Shell
 from .db import DatabaseCore, DatabaseHandler  # Database
@@ -83,3 +80,4 @@ class Bot(commands.Bot):
     async def on_ready(self):
         """On ready message"""
         print(f"[Core] {self.user} is ready")
+        
