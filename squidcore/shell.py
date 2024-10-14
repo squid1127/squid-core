@@ -298,7 +298,9 @@ class ShellHandler(commands.Cog):
         return
 
     async def shell_callback(self, command: ShellCommand):
+        """Shell command callback"""
         if command.name == "status":
+            print("[Core.ShellHandler] Status command called")
             # Run cog_check on all cogs
             edit = await command.log(   
                 f"{self.bot.user.name.title()} is currently online and operational.\n\nChecking cogs...",
@@ -307,11 +309,14 @@ class ShellHandler(commands.Cog):
             )
             fields = []
             for cog in self.bot.cogs:
+                print(f"[Core.ShellHandler] Checking cog {cog}")
                 try:
                     check = await self.bot.cogs[cog].cog_status()
                     fields.append({"name": cog, "value": check})
+                    print(f"[Core.ShellHandler] Cog {cog} is {check}")
                 except AttributeError:
                     fields.append({"name": cog, "value": "Status unknown"})
+                    print(f"[Core.ShellHandler] Cog {cog} status unknown (no cog_status method)")
 
             await command.log(
                 f"{self.bot.user.name.title()} is currently online and operational.",
@@ -377,4 +382,5 @@ class ShellHandler(commands.Cog):
         await command.log(preset="CogNoCommandError")
 
     async def cog_status(self):
+        """Cog status check"""
         return f"Running\nChannel: {self.core.channel.mention}\nInteractive Mode: {self.core.interactive_mode}"
