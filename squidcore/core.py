@@ -9,7 +9,7 @@ import asyncio
 # * Internal Packages & Imports
 from .shell import ShellCore, ShellHandler, ShellCommand  # Shell
 from .db import DatabaseCore, DatabaseHandler  # Database
-
+from .status import RandomStatus, Status  # Random Status
 
 # * Core
 class Bot(commands.Bot):
@@ -79,6 +79,17 @@ class Bot(commands.Bot):
             )
         except Exception as e:
             print(f"[Core] Failed to add database handler: {e}")
+            
+    def set_status(self, random_status: list[Status] = None, static_status: Status = None):
+        
+        if random_status:
+            status = RandomStatus(self, random_status)
+            asyncio.run(self.add_cog(status))
+        elif static_status:
+            self.static_status = static_status
+        else:
+            raise ValueError("No status provided")
+        
 
     def run(self):
         """Start the bot"""
@@ -91,3 +102,9 @@ class Bot(commands.Bot):
     async def on_ready(self):
         """On ready message"""
         print(f"[Core] {self.user} is ready")
+        
+        # Set static status if provided
+        if hasattr(self, "static_status"):
+            await self.change_presence(activity=self.static_status())
+        else:
+            print("[Core] No static status provided")
