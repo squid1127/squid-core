@@ -1,5 +1,5 @@
 # External imports
-from discord.ext import commands
+from discord.ext import commands, tasks
 
 # Postgres database
 import asyncpg
@@ -17,6 +17,10 @@ from typing import Literal
 import time
 import datetime
 
+# For testing; random string 
+import random
+
+
 class DatabaseTable:
     def __init__(self, schema: "DatabaseSchema", name: str):
         self.schema = schema
@@ -24,27 +28,30 @@ class DatabaseTable:
         self.columns = []
         self.data = []
         
+        self.random = int(random.random() * 10 ** 10)
+
         self.last_fetch = None
+        
         # Setup default fetch interval values
         self.configure()
-        
+
     def configure(self, fetch_interval_minutes: int = 15):
         """
         Configures the periodic fetch behavior of the database table.
         Args:
-            fetch_interval_minutes (int): The interval in minutes for fetching data. 
+            fetch_interval_minutes (int): The interval in minutes for fetching data.
                                           If set to 0, periodic fetching is disabled.
         Sets:
             self.do_periodic_fetch (bool): Indicates whether periodic fetching is enabled.
             self.fetch_interval (int): The interval in minutes for fetching data, if periodic fetching is enabled.
         """
-        
+
         if fetch_interval_minutes == 0:
             self.do_periodic_fetch = False
         else:
             self.do_periodic_fetch = True
             self.fetch_interval = fetch_interval_minutes
-            
+
     async def get_data(self):
         """
         Asynchronously retrieves data for the database schema and name.
@@ -54,26 +61,32 @@ class DatabaseTable:
         Returns:
             The data for the database schema and name, either fetched or cached.
         """
-        
-        print(f"[Core.Database] Data requested for {self.schema} -> {self.name}")
-        if self.last_fetch is None:
+
+        print(f"[Core.Database] Data requested for {self.schema} -> {self.name} ({self.random})")
+        print(f"[Core.Database] Last fetch: {self.last_fetch}")
+        if self.last_fetch == None or self.do_periodic_fetch == False:
             print(f"[Core.Database] Fetching all data for {self.schema} -> {self.name}")
             return await self.fetch_all()
-        
+
         # Check if the data is stale
         if time.time() - self.last_fetch > self.fetch_interval * 60:
             print(f"[Core.Database] Data stale for {self.schema} -> {self.name}")
             return await self.fetch_all()
-        
+
         print(f"[Core.Database] Using cached data for {self.schema} -> {self.name}")
         return self.data
-            
+
     async def fetch_all(self):
         """Retrieve all data from the database"""
-        result = await self.schema.db.core.query(f"SELECT * FROM '{self.schema}'.'{self}'")
-        self.data = self.schema.db.core.table_to_list_dict(result)
+        result = await self.schema.db.core.query(
+            f"SELECT * FROM {self.schema}.{self}"
+        )
         
+        print(f"[Core.Database] Data fetched, converting for {self.schema} -> {self.name} ({self.random})")
+        self.data = self.schema.db.core.table_to_list_dict(result)
+
         self.last_fetch = time.time()
+        print(f"[Core.Database] Data fetched for {self.schema} -> {self.name} ({self.random})")
         return self.data
 
     async def get_columns(self):
@@ -99,15 +112,32 @@ class DatabaseTable:
             )
         return self
     
+    async def insert(self, data: dict):
+        """Add a row to the table"""
+        # COnfigure placeholders
+        placeholders = ", ".join(["${}".format(i + 1) for i in range(len(data))])
+        columns = ", ".join(data.keys())
+        values = list(data.values())
+        
+        print(f'[Core.Database] Executing query: INSERT INTO {self.schema}.{self.name} ({columns}) VALUES ({placeholders})')
+        # Execute query
+        await self.schema.db.core.execute(
+            f"INSERT INTO {self.schema}.{self.name} ({columns}) VALUES ({placeholders})",
+            *values
+        )
+        
+        return True
+        
+
     def __str__(self) -> str:
         return self.name
 
     def __repr__(self) -> str:
-        f"DatabaseObject().get_schema('{self.schema}').get_table('{self.name}')"
-    
+        return f"DatabaseObject().get_schema('{self.schema}').get_table('{self.name}')"
+
     async def __call__(self):
         return await self.get_data()
-        
+
 
 class DatabaseSchema:
     def __init__(self, db: "DatabaseObject", name: str):
@@ -229,6 +259,9 @@ class DatabaseObject:
         await self.get_all_schemas()
         for schema in self.schemas:
             await self.schemas[schema].index_all()
+            
+        print("[Core.Database] Indexing complete")
+        
 
     def _add_schema(self, name: str):
         """Add a schema to the database"""
@@ -253,6 +286,7 @@ class DatabaseCore:
         self.postgres_max_pool = postgres_pool
         self.pool = None
         self.working = False
+        self.indexed = False
         ignore = [
             "pg_toast",
             "pg_catalog",
@@ -465,9 +499,15 @@ class DatabaseHandler(commands.Cog):
                 )
                 return
 
-        print("[Core.Database] Database connected; indexing")
+        print("[Core.Database] Database connected; starting indexing task")
+        self.periodic_index.start()
+        print("[Core.Database] Database indexing task started")
+
+    @tasks.loop(hours=1)
+    async def periodic_index(self):
+        print("[Core.Database] Periodic indexing")
         await self.core.data.index_all()
-        print("[Core.Database] Ready")
+        self.core.indexed = True
 
     # Cog Status
     async def cog_status(self) -> str:
