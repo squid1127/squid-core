@@ -132,3 +132,8 @@ class Bot(commands.Bot):
             await self.change_presence(activity=self.static_status())
         else:
             print("[Core] No static status provided")
+            
+        # Sync application commands
+        print("[Core] Syncing application commands")
+        await self.tree.sync()
+        print("[Core] Application commands synced")
