@@ -11,6 +11,7 @@ from .shell import ShellCore, ShellHandler, ShellCommand  # Shell
 from .db import *  # Database
 from .status import RandomStatus, Status  # Random Status
 from .files import *  # File management
+from .impersonate import *  # Impersonation (Talking as the bot and dm handling)
 
 # * Core
 class Bot(commands.Bot):
