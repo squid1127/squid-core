@@ -10,6 +10,7 @@ import asyncio
 from .shell import ShellCore, ShellHandler, ShellCommand  # Shell
 from .db import *  # Database
 from .status import RandomStatus, Status  # Random Status
+from .files import *  # File management
 
 # * Core
 class Bot(commands.Bot):
