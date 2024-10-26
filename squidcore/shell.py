@@ -267,7 +267,7 @@ class ShellCommand:
             msg_object = await self.channel.send(embed=embed)
         return msg_object
 
-    async def raw(self, message: str, edit: discord.Message = None):
+    async def raw(self, message: str, edit: discord.Message = None, **kwargs):
         """
         Sends a raw message to the shell channel.
         Args:
@@ -276,9 +276,9 @@ class ShellCommand:
             discord.Message: The message object that was sent.
         """
         if edit:
-            msg_object = await edit.edit(content=message)
+            msg_object = await edit.edit(content=message, **kwargs)
         else:
-            msg_object = await self.channel.send(message)
+            msg_object = await self.channel.send(message, **kwargs)
         return msg_object
 
 
