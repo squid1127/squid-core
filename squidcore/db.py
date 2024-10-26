@@ -91,6 +91,18 @@ class DatabaseTable:
         self.last_fetch = time.time()
         print(f"[Core.Database] Data fetched for {self.schema} -> {self.name} ({self.random})")
         return self.data
+    
+    async def fetch_filtered(self, filters: dict):
+        """Retrieve filtered data from the database"""
+        # Configure filter
+        filter_string = " AND ".join([f"{key} = '{value}'" for key, value in filters.items()])
+        
+        result = await self.schema.db.core.query(
+            f"SELECT * FROM {self.schema}.{self} WHERE {filter_string}"
+        )
+        
+        self.data = self.schema.db.core.table_to_list_dict(result)
+        return self.data
 
     async def get_columns(self):
         """Get all columns in the table"""
