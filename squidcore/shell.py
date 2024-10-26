@@ -2,6 +2,7 @@ import asyncio
 import discord
 from discord.ext import commands
 
+
 class ShellCore:
     """
     Core shell functionality for the bot. Contains methods for sending messages in the shell channel, as well as attributes for the bot, channel, interactive mode, and name
@@ -11,7 +12,7 @@ class ShellCore:
         self.bot = bot
 
         self.channel_id = channel_id
-        self.interactive_mode = None
+        self.interactive_mode = (None, None)
         self.name = name
 
         self.commands = []
@@ -134,7 +135,7 @@ class ShellCore:
         --------
         discord.Message
             The Discord message object that was sent or edited.
-        """        
+        """
         embed = await self.create_embed(
             message=message,
             title=title,
@@ -164,6 +165,7 @@ class ShellCore:
         )
         return msg_object
 
+
 class ShellCommand:
     """
     A class to represent a shell command. Contains methods for sending messages in the shell channel, as well as attributes for the command name, cog, and shell
@@ -190,7 +192,7 @@ class ShellCommand:
 
     def __call__(self):
         return (self.name, self.query)
-    
+
     def params_to_dict(self, params: str):
         if params is None:
             params = self.query
@@ -218,11 +220,12 @@ class ShellCommand:
                 previous = None
             else:
                 raise SyntaxError(f"Invalid parameter: {param}")
-            
+
         if previous:
             params_dict[previous] = True
-            
+
         return params_dict
+
     async def log(
         self,
         description: str = None,
@@ -263,6 +266,7 @@ class ShellCommand:
         else:
             msg_object = await self.channel.send(embed=embed)
         return msg_object
+
     async def raw(self, message: str, edit: discord.Message = None):
         """
         Sends a raw message to the shell channel.
@@ -276,6 +280,7 @@ class ShellCommand:
         else:
             msg_object = await self.channel.send(message)
         return msg_object
+
 
 class ShellCommandEntry:
     """
@@ -306,6 +311,7 @@ class ShellCommandEntry:
 
     def __str__(self):
         return f"`{self.command}` - {self.description}"
+
 
 class ShellHandler(commands.Cog):
     def __init__(self, bot: commands.Bot, core: ShellCore):
@@ -342,7 +348,7 @@ class ShellHandler(commands.Cog):
         if message.author == self.bot.user:
             return
         if message.channel.id == self.core.channel_id:
-            if message.content.startswith(f"{self.core.name.lower()}"):
+            if message.content.startswith(f"{self.core.name.lower()}") or self.core.interactive_mode[0] is not None:
                 result = await self.execute_command(message)
 
     # Shell command parser
@@ -351,6 +357,42 @@ class ShellHandler(commands.Cog):
             self.core.channel
         except AttributeError:
             print("[Core.ShellHandler] Shell channel not found!")
+            return
+
+        # Interactive mode
+        if self.core.interactive_mode[0] is not None:
+            print("[Core.ShellHandler] Interactive mode is on")
+            cog = self.core.interactive_mode[0]
+            callback = self.core.interactive_mode[1]
+
+            if message.content == "exit":
+                self.core.interactive_mode = (None, None)
+                await self.core.log(
+                    f"Returning to normal shell mode.",
+                    title="Interactive Mode",
+                    msg_type="info",
+                    cog="Shell",
+                )
+                return
+
+            commandClass = ShellCommand(
+                name=callback,
+                cog=cog,
+                shell=self.core,
+                query=message.content,
+                message=message,
+            )
+            
+            try:
+                await self.bot.cogs[cog].shell_callback(commandClass)
+            except Exception as e:
+                await self.core.log(
+                    f"An unknown error occurred facilitating interactive mode: {e}",
+                    title="Interactive Mode Error",
+                    msg_type="error",
+                    cog="Shell",
+                )
+                
             return
 
         # Check if command is empty
@@ -501,3 +543,4 @@ class ShellHandler(commands.Cog):
     async def cog_status(self):
         """Cog status check"""
         return f"Running\nChannel: {self.core.channel.mention}\nInteractive Mode: {self.core.interactive_mode}"
+
