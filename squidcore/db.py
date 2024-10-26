@@ -58,6 +58,9 @@ class DatabaseTable:
         This method checks if the data is stale or if it has never been fetched before.
         If the data is stale or has never been fetched, it fetches all data.
         Otherwise, it returns the cached data.
+        
+        To force a fetch, use the `fetch_all` method.
+        
         Returns:
             The data for the database schema and name, either fetched or cached.
         """
