@@ -423,6 +423,14 @@ class DatabaseCore:
             return 1
         except Exception as e:
             return 0
+        
+    async def wait_until_ready(self):
+        """
+        Waits until the database is ready to be used.
+        """
+        while (not self.working) or (not self.indexed):
+            await asyncio.sleep(1)
+        return
 
     # Tables
     def table_to_list_dict(self, data: list) -> list:
