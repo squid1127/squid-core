@@ -347,6 +347,8 @@ class ShellHandler(commands.Cog):
         """Listen for shell commands in the shell channel"""
         if message.author == self.bot.user:
             return
+        if message.author.bot:
+            return
         if message.channel.id == self.core.channel_id:
             if message.content.startswith(f"{self.core.name.lower()}") or self.core.interactive_mode[0] is not None:
                 result = await self.execute_command(message)
