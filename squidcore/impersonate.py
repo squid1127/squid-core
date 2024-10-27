@@ -5,6 +5,7 @@ from discord.ext import commands, tasks
 from .shell import ShellCore, ShellCommand
 
 import math
+import datetime
 
 
 class ImpersonateCore:
@@ -12,8 +13,22 @@ class ImpersonateCore:
         self.bot = bot
         self.shell = shell
 
-    async def active_threads(self, guildMode: bool = False):
+    async def active_threads(self, guildMode: bool = False, forceUpdate: bool = False):
         """Get all active threads in the shell channel."""
+        print("[Impersonate] Getting active threads.")
+        
+        if guildMode:
+            if hasattr(self, "active_threads_guild") and hasattr(self, "active_threads_guild_time") and not forceUpdate:
+                if (datetime.datetime.now() - self.active_threads_guild_time).seconds < 1800:
+                    print("[Impersonate] Returning cached threads.")
+                    return self.active_threads_guild
+        else:
+            if hasattr(self, "active_threads_dm") and hasattr(self, "active_threads_dm_time") and not forceUpdate:
+                if (datetime.datetime.now() - self.active_threads_dm_time).seconds < 1800:
+                    print("[Impersonate] Returning cached threads.")
+                    return self.active_threads_dm
+                
+        print("[Impersonate] Updating active threads.")
 
         shell = self.shell.get_channel()
         threads: list[discord.Thread] = shell.threads
@@ -36,12 +51,28 @@ class ImpersonateCore:
             for thread in threads:
                 name = thread.name.split("//")[0]
                 thread_names[name] = thread
+                
+            self.active_threads_guild = (threads, thread_names)
+            self.active_threads_guild_time = datetime.datetime.now()
             return (
                 threads,
                 thread_names,
             )
         else:
-            return [thread for thread in threads if thread.name.startswith("&&DM.")]
+            threads = [
+                thread for thread in threads if thread.name.startswith("&&DM.")
+            ]
+
+            thread_names = {}
+            for thread in threads:
+                name = thread.name.split("//")[0]
+                thread_names[name] = thread
+            self.active_threads_dm = (threads, thread_names)
+            self.active_threads_dm_time = datetime.datetime.now()
+            return (
+                threads,
+                thread_names,
+            )
 
     async def handle(
         self, message: discord.Message = None, incoming: bool = False, **kwargs
@@ -219,6 +250,8 @@ class ImpersonateCore:
             thread = await message.create_thread(
                 name=name_readable, auto_archive_duration=60
             )
+            print("[Impersonate] Thread created, updating active threads.")
+            await self.active_threads(guildMode=(user is None), forceUpdate=True)
             await thread.send(
                 embed=discord.Embed(
                     description="Thread created for impersonation.",
@@ -249,19 +282,20 @@ class ImpersonateGuild(commands.Cog):
     @commands.Cog.listener()
     async def on_ready(self):
         print("[Impersonate] Ready, starting tasks.")
-        self.get_threads.start()
-
-    @tasks.loop(minutes=30)
-    async def get_threads(self):
-        self.active_threads = await self.core.active_threads(guildMode=True)
 
     async def cog_status(self):
         return f"Ready."
+    
 
     @commands.Cog.listener()
     async def on_message(self, message: discord.Message):
         if message.author == self.bot.user:
             return
+        
+        if message.guild is None:
+            return
+        
+        threads, thread_names = await self.core.active_threads(guildMode=True)
 
         if not hasattr(self, "active_threads"):
             try:
@@ -283,7 +317,7 @@ class ImpersonateGuild(commands.Cog):
         print(
             f"[Impersonate] Checking for thread: {name} against {self.active_threads[1]}"
         )
-        if name in self.active_threads[1].keys():
+        if name in thread_names.keys():
             print("[Impersonate] Thread found.")
             await self.core.handle(message=message, incoming=True)
 
