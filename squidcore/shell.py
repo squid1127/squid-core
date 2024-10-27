@@ -164,7 +164,17 @@ class ShellCore:
             embed=embed,
         )
         return msg_object
-
+    
+    def get_channel(self):
+        if self.channel:
+            return self.channel
+        else:
+            # Check if bot is ready
+            if not self.bot.is_ready():
+                return
+            
+            self.channel = self.bot.get_channel(self.channel_id)
+            return self.channel
 
 class ShellCommand:
     """
