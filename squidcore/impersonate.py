@@ -15,17 +15,17 @@ class ImpersonateCore:
 
     async def active_threads(self, guildMode: bool = False, forceUpdate: bool = False):
         """Get all active threads in the shell channel."""
-        print("[Impersonate] Getting active threads.")
+        # print("[Impersonate] Getting active threads.")
         
         if guildMode:
             if hasattr(self, "active_threads_guild") and hasattr(self, "active_threads_guild_time") and not forceUpdate:
                 if (datetime.datetime.now() - self.active_threads_guild_time).seconds < 1800:
-                    print("[Impersonate] Returning cached threads.")
+                    # print("[Impersonate] Returning cached threads.")
                     return self.active_threads_guild
         else:
             if hasattr(self, "active_threads_dm") and hasattr(self, "active_threads_dm_time") and not forceUpdate:
                 if (datetime.datetime.now() - self.active_threads_dm_time).seconds < 1800:
-                    print("[Impersonate] Returning cached threads.")
+                    # print("[Impersonate] Returning cached threads.")
                     return self.active_threads_dm
                 
         print("[Impersonate] Updating active threads.")
@@ -314,17 +314,14 @@ class ImpersonateGuild(commands.Cog):
             return
 
         name = f"&&guild.{message.guild.id}.{message.channel.id}"
-        print(
-            f"[Impersonate] Checking for thread: {name} against {self.active_threads[1]}"
-        )
         if name in thread_names.keys():
-            print("[Impersonate] Thread found.")
+            print("[ImpersonateGuild] Incoming message has matching thread, processing.")
             await self.core.handle(message=message, incoming=True)
 
     async def shell_callback(self, command: ShellCommand):
         if command.name == "impersonate-guild" or command.name == "ig":
             query = command.query
-            print("[Impersonate] Thread requseted with query:", query)
+            print("[ImpersonateGuild] Thread requseted with query:", query)
 
             # Discord url parsing
             if query.startswith("https://discord.com/channels/"):
@@ -373,7 +370,7 @@ class ImpersonateGuild(commands.Cog):
                 )
                 return
 
-            print(f"[Impersonate] {guild.name} - {channel.name}")
+            print(f"[ImpersonateGuild] {guild.name} - {channel.name}")
 
             try:
                 thread = await self.core.get_thread(channel=channel)
