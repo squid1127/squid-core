@@ -5,7 +5,7 @@ from discord.ext import commands, tasks
 from .shell import ShellCore, ShellCommand
 
 import math
-import datetime
+import time
 
 
 class ImpersonateCore:
@@ -15,7 +15,7 @@ class ImpersonateCore:
 
     async def active_threads(self, guildMode: bool = False, forceUpdate: bool = False):
         """Get all active threads in the shell channel."""
-        # print("[Impersonate] Getting active threads.")
+        # print("[Impersonate] Getting active threads."
 
         if guildMode:
             if (
@@ -23,24 +23,35 @@ class ImpersonateCore:
                 and hasattr(self, "active_threads_guild_time")
                 and not forceUpdate
             ):
+                # print(f"[Impersonate] Cached threads found. | Cached time: {self.active_threads_guild_time} | Current time: {time.time()} | Time difference: {time.time() - self.active_threads_guild_time}")
                 if (
-                    datetime.datetime.now() - self.active_threads_guild_time
-                ).seconds < 1800:
+                    time.time() - self.active_threads_guild_time < 1800
+                ):
                     # print("[Impersonate] Returning cached threads.")
                     return self.active_threads_guild
+                else:
+                    print("[Impersonate] Cached threads found, but expired.")
+            else:
+                print("[Impersonate] No cached threads found.")
+                
         else:
             if (
                 hasattr(self, "active_threads_dm")
                 and hasattr(self, "active_threads_dm_time")
                 and not forceUpdate
             ):
+                # print(f"[Impersonate] Cached threads found. | Cached time: {self.active_threads_dm_time} | Current time: {time.time()} | Time difference: {time.time() - self.active_threads_dm_time}")
                 if (
-                    datetime.datetime.now() - self.active_threads_dm_time
-                ).seconds < 1800:
+                    time.time() - self.active_threads_dm_time < 1800
+                ):
                     # print("[Impersonate] Returning cached threads.")
                     return self.active_threads_dm
+                else:
+                    print("[Impersonate] Cached threads found, but expired.")
+            else:
+                print("[Impersonate] No cached threads found.")
 
-        print("[Impersonate] Updating active threads.")
+        print(f"[Impersonate] Updating active { 'guild' if guildMode else 'DM' } threads.")
 
         shell = self.shell.get_channel()
         threads: list[discord.Thread] = shell.threads
@@ -74,12 +85,18 @@ class ImpersonateCore:
             name = thread.name.split("//")[1]
             thread_names[name] = thread
 
-        self.active_threads_guild = (threads, thread_names)
-        self.active_threads_guild_time = datetime.datetime.now()
-        return (
-            threads,
-            thread_names,
-        )
+        print("[Impersonate] Active threads updated.")
+
+        if guildMode:
+            self.active_threads_guild = (threads, thread_names)
+            self.active_threads_guild_time = time.time()
+
+            return self.active_threads_guild
+        else:
+            self.active_threads_dm = (threads, thread_names)
+            self.active_threads_dm_time = time.time()
+
+            return self.active_threads_dm
     
     async def handle(
         self, message: discord.Message = None, incoming: bool = False, dm: bool = False
