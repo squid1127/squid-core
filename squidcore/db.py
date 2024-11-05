@@ -17,7 +17,7 @@ from typing import Literal
 import time
 import datetime
 
-# For testing; random string 
+# For testing; random string
 import random
 
 
@@ -27,11 +27,11 @@ class DatabaseTable:
         self.name = name
         self.columns = []
         self.data = []
-        
-        self.random = int(random.random() * 10 ** 10)
+
+        self.random = int(random.random() * 10**10)
 
         self.last_fetch = None
-        
+
         # Setup default fetch interval values
         self.configure()
 
@@ -58,14 +58,16 @@ class DatabaseTable:
         This method checks if the data is stale or if it has never been fetched before.
         If the data is stale or has never been fetched, it fetches all data.
         Otherwise, it returns the cached data.
-        
+
         To force a fetch, use the `fetch_all` method.
-        
+
         Returns:
             The data for the database schema and name, either fetched or cached.
         """
 
-        print(f"[Core.Database] Data requested for {self.schema} -> {self.name} ({self.random})")
+        print(
+            f"[Core.Database] Data requested for {self.schema} -> {self.name} ({self.random})"
+        )
         print(f"[Core.Database] Last fetch: {self.last_fetch}")
         if self.last_fetch == None or self.do_periodic_fetch == False:
             print(f"[Core.Database] Fetching all data for {self.schema} -> {self.name}")
@@ -81,26 +83,30 @@ class DatabaseTable:
 
     async def fetch_all(self):
         """Retrieve all data from the database"""
-        result = await self.schema.db.core.query(
-            f"SELECT * FROM {self.schema}.{self}"
+        result = await self.schema.db.core.query(f"SELECT * FROM {self.schema}.{self}")
+
+        print(
+            f"[Core.Database] Data fetched, converting for {self.schema} -> {self.name} ({self.random})"
         )
-        
-        print(f"[Core.Database] Data fetched, converting for {self.schema} -> {self.name} ({self.random})")
         self.data = self.schema.db.core.table_to_list_dict(result)
 
         self.last_fetch = time.time()
-        print(f"[Core.Database] Data fetched for {self.schema} -> {self.name} ({self.random})")
+        print(
+            f"[Core.Database] Data fetched for {self.schema} -> {self.name} ({self.random})"
+        )
         return self.data
-    
+
     async def fetch_filtered(self, filters: dict):
         """Retrieve filtered data from the database"""
         # Configure filter
-        filter_string = " AND ".join([f"{key} = '{value}'" for key, value in filters.items()])
-        
+        filter_string = " AND ".join(
+            [f"{key} = '{value}'" for key, value in filters.items()]
+        )
+
         result = await self.schema.db.core.query(
             f"SELECT * FROM {self.schema}.{self} WHERE {filter_string}"
         )
-        
+
         self.data = self.schema.db.core.table_to_list_dict(result)
         return self.data
 
@@ -126,23 +132,24 @@ class DatabaseTable:
                 f"[Core.Database] Indexing -> {self.schema} -> {self.name} -> {column.get('column_name')}"
             )
         return self
-    
+
     async def insert(self, data: dict):
         """Add a row to the table"""
         # COnfigure placeholders
         placeholders = ", ".join(["${}".format(i + 1) for i in range(len(data))])
         columns = ", ".join(data.keys())
         values = list(data.values())
-        
-        print(f'[Core.Database] Executing query: INSERT INTO {self.schema}.{self.name} ({columns}) VALUES ({placeholders})')
+
+        print(
+            f"[Core.Database] Executing query: INSERT INTO {self.schema}.{self.name} ({columns}) VALUES ({placeholders})"
+        )
         # Execute query
         await self.schema.db.core.execute(
             f"INSERT INTO {self.schema}.{self.name} ({columns}) VALUES ({placeholders})",
-            *values
+            *values,
         )
-        
+
         return True
-        
 
     def __str__(self) -> str:
         return self.name
@@ -274,9 +281,8 @@ class DatabaseObject:
         await self.get_all_schemas()
         for schema in self.schemas:
             await self.schemas[schema].index_all()
-            
+
         print("[Core.Database] Indexing complete")
-        
 
     def _add_schema(self, name: str):
         """Add a schema to the database"""
@@ -302,6 +308,9 @@ class DatabaseCore:
         self.pool = None
         self.working = False
         self.indexed = False
+
+        self.discord = DiscordData(self)
+
         ignore = [
             "pg_toast",
             "pg_catalog",
@@ -347,8 +356,19 @@ class DatabaseCore:
                     status = await self.check_status()
                     if status == 2:
                         print("[Core.Database] Database connection successful")
-                        self.working = True
-                        return True
+                        try:
+                            post_start = await self.post_start()
+                        except Exception as e:
+                            reason_failed = e
+                        else:
+                            if post_start == True:
+                                self.working = True
+                                return True
+                            else:
+                                reason_failed = (
+                                    post_start if post_start else "Post-startup failed"
+                                )
+
                     elif status == 1:
                         print("[Core.Database] Database connected but no tables found")
                         self.working = True
@@ -371,6 +391,14 @@ class DatabaseCore:
                 "[Core.Database] Failed to connect to database, retrying in 10 seconds"
             )
             await asyncio.sleep(10)
+
+    async def post_start(self):
+        """Post-startup tasks"""
+        # Check if the database is ready
+        print("[Core.Database] Processing post-startup tasks")
+        await self.discord.setup(trycatch=False)
+        print("[Core.Database] Post-startup tasks complete")
+        return True
 
     # * Database Queries & Functions
     # Create connection pool
@@ -438,7 +466,7 @@ class DatabaseCore:
             return 1
         except Exception as e:
             return 0
-        
+
     async def wait_until_ready(self):
         """
         Waits until the database is ready to be used.
@@ -605,19 +633,79 @@ class DatabaseHandler(commands.Cog):
                 preset="CogNoCommandError",
             )
 
-    async def test_script(self, command: ShellCommand):
-        # Test script
-        try:
-            await command.raw("Testing script")
+    # async def test_script(self, command: ShellCommand):
+    #     # Test script
+    #     try:
+    #         await command.raw("Testing script")
 
-            public = DatabaseSchema(self.core, "public")
+    #         public = DatabaseSchema(self.core, "public")
 
-            if not await public.check_exsists():
-                await command.raw("Schema does not exist")
-                return
-            await command.raw("Schema exists")
+    #         if not await public.check_exsists():
+    #             await command.raw("Schema does not exist")
+    #             return
+    #         await command.raw("Schema exists")
 
-            tables = await public.get_tables()
-            await command.raw(f"Tables:\n```python\n{tables}\n```")
-        except Exception as e:
-            await command.raw(f"Error:\n```python\n{e}\n```")
+    #         tables = await public.get_tables()
+    #         await command.raw(f"Tables:\n```python\n{tables}\n```")
+    #     except Exception as e:
+    #         await command.raw(f"Error:\n```python\n{e}\n```")
+
+
+# Discord data (servers, channels, members)
+class DBDiscordGuild:
+    """Represents a Discord guild in the database, including any configuration and associated data"""
+
+
+class DiscordData:
+    """Specialized class for managing Discord data, such as servers, channels, and members"""
+
+    def __init__(self, db: DatabaseCore):
+        self.db = db
+
+    SCHEMA = "server_data"
+    GUILD_TABLE = "guilds"
+    CHANNEL_TABLE = "channels"
+    MEMBER_TABLE = "members"
+
+    POSTGRES = f"""
+    CREATE SCHEMA IF NOT EXISTS {SCHEMA};
+    CREATE TABLE IF NOT EXISTS {SCHEMA}.{GUILD_TABLE} (
+        id BIGINT PRIMARY KEY NOT NULL,
+        name TEXT NOT NULL,
+        owner_id BIGINT,
+        locked BOOLEAN DEFAULT FALSE,
+        options JSON,
+        info JSON
+    );
+    CREATE TABLE IF NOT EXISTS {SCHEMA}.{CHANNEL_TABLE} (
+        id BIGINT PRIMARY KEY NOT NULL,
+        name TEXT NOT NULL,
+        type TEXT NOT NULL,
+        guild_id BIGINT REFERENCES {SCHEMA}.{GUILD_TABLE}(id),
+        options JSON,
+        info JSON
+    );
+    CREATE TABLE IF NOT EXISTS {SCHEMA}.{MEMBER_TABLE} (
+        id BIGINT PRIMARY KEY NOT NULL,
+        username TEXT NOT NULL,
+        discriminator TEXT,
+        guilds JSON,
+        options JSON,
+        info JSON
+    );
+    """
+
+    async def setup(self, trycatch: bool = True):
+        print("[Core.Database.ServerData] Setting up server data tables")
+        if trycatch:
+            try:
+                await self.db.execute(self.POSTGRES)
+            except Exception as e:
+                print(
+                    f"[Core.Database.ServerData] Error setting up server data tables: {e}"
+                )
+                return e
+            return True
+        else:
+            await self.db.execute(self.POSTGRES)
+            return True
