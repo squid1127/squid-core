@@ -125,6 +125,7 @@ class Bot(commands.Bot):
     async def _load_cogs(self):
         await self.add_cog(ShellHandler(self, self.shell))
         await self.add_cog(ImpersonateGuild(self, self.shell))
+        await self.add_cog(ImpersonateDM(self, self.shell))
 
     async def on_ready(self):
         """On ready message"""
