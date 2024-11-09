@@ -50,6 +50,8 @@ class Bot(commands.Bot):
         self.name = name
         self.shell_channel = shell_channel
         self.has_db = False
+        
+        self.cog_cache = {}
 
         # Shell
         self.shell = ShellCore(self, self.shell_channel, self.name)
@@ -61,8 +63,10 @@ class Bot(commands.Bot):
             help_command=None,
         )
 
-        # Cogs
+        # Load cogs
+        print("[Core] Loading cogs...")
         asyncio.run(self._load_cogs())
+        print("[Core] Cogs loaded")
 
         print(f"[Core] {self.name.title()} bot initialized")
 
@@ -122,14 +126,15 @@ class Bot(commands.Bot):
         print(f"[Core] Running bot {self.name}")
         super().run(token=self.token)
 
-    async def _load_cogs(self):
-        await self.add_cog(ShellHandler(self, self.shell))
-        await self.add_cog(ImpersonateGuild(self, self.shell))
-        await self.add_cog(ImpersonateDM(self, self.shell))
-
     async def on_ready(self):
         """On ready message"""
         print(f"[Core] {self.user} is ready")
+            
+        # Sync application commands
+        print("[Core] Syncing application commands")
+        await self.tree.sync()
+        print("[Core] Application commands synced")
+
         
         # Set static status if provided
         if hasattr(self, "static_status"):
@@ -137,7 +142,22 @@ class Bot(commands.Bot):
         else:
             print("[Core] No static status provided")
             
-        # Sync application commands
-        print("[Core] Syncing application commands")
-        await self.tree.sync()
-        print("[Core] Application commands synced")
+    async def add_cog(self, cog, *args, **kwargs):
+        """Adds a cog to the bot"""
+        await super().add_cog(cog, *args, **kwargs)
+        self.cog_cache[cog.__class__.__name__] = cog
+        
+    async def add_cog_unloaded(self, cog, *args, **kwargs):
+        """Adds a cog to the bot without loading it, to be manually loaded later"""
+        self.cog_cache[cog.__class__.__name__] = cog
+        
+    async def load_cog(self, cog_name):
+        """Loads a cog that was previously added without loading"""
+        if cog_name in self.cog_cache:
+            raise ValueError(f"Cog {cog_name} not found in cache")
+        await self.add_cog(self.cog_cache[cog_name])
+
+    async def _load_cogs(self):
+        await self.add_cog(ShellHandler(self, self.shell))
+        await self.add_cog(ImpersonateGuild(self, self.shell))
+        await self.add_cog(ImpersonateDM(self, self.shell))

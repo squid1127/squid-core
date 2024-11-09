@@ -164,7 +164,7 @@ class ShellCore:
             embed=embed,
         )
         return msg_object
-    
+
     def get_channel(self):
         if self.channel:
             return self.channel
@@ -172,9 +172,10 @@ class ShellCore:
             # Check if bot is ready
             if not self.bot.is_ready():
                 return
-            
+
             self.channel = self.bot.get_channel(self.channel_id)
             return self.channel
+
 
 class ShellCommand:
     """
@@ -324,6 +325,7 @@ class ShellCommandEntry:
 
 
 class ShellHandler(commands.Cog):
+    """An extension of the core shell functionality for the bot. Contains methods for executing shell commands and managing cogs"""
     def __init__(self, bot: commands.Bot, core: ShellCore):
         self.bot = bot
         self.core = core
@@ -331,19 +333,8 @@ class ShellHandler(commands.Cog):
         # Ingreated commands
         self.core.add_command("status", "ShellHandler", "Check the status of the bot")
         self.core.add_command("help", "ShellHandler", "Show this help message")
-        self.core.add_command(
-            "count", "ShellHandler", "A random command that counts up to a number"
-        )
-
-        # Debug commands
-        self.core.add_command(
-            "debug-nocog", "NotACog", "A command inside a non-existent cog"
-        )
-        self.core.add_command(
-            "debug-nocommand",
-            "ShellHandler",
-            "A command that does not exist in the cog",
-        )
+        self.core.add_command("cog", "ShellHandler", "Manage cogs")
+        self.core.add_command("die", "ShellHandler", "Kill the bot")
 
     @commands.Cog.listener()
     async def on_ready(self):
@@ -360,7 +351,10 @@ class ShellHandler(commands.Cog):
         if message.author.bot:
             return
         if message.channel.id == self.core.channel_id:
-            if message.content.startswith(f"{self.core.name.lower()}") or self.core.interactive_mode[0] is not None:
+            if (
+                message.content.startswith(f"{self.core.name.lower()}")
+                or self.core.interactive_mode[0] is not None
+            ):
                 result = await self.execute_command(message)
 
     # Shell command parser
@@ -394,7 +388,7 @@ class ShellHandler(commands.Cog):
                 query=message.content,
                 message=message,
             )
-            
+
             try:
                 await self.bot.cogs[cog].shell_callback(commandClass)
             except Exception as e:
@@ -404,7 +398,7 @@ class ShellHandler(commands.Cog):
                     msg_type="error",
                     cog="Shell",
                 )
-                
+
             return
 
         # Check if command is empty
@@ -516,38 +510,139 @@ class ShellHandler(commands.Cog):
                 fields=fields,
             )
             return
-        elif command.name == "count":
-            # Count to a number
-            try:
-                count = int(command.query[0])
-            except:
+        elif command.name == "cog":
+            # Cog management
+            if command.query.startswith("load"):
+                action = "load"
+            elif command.query.startswith("unload"):
+                action = "unload"
+            elif command.query.startswith("reload"):
+                action = "reload"
+            else:
+                action = "list"
+
+            if action == "list":
+                fields = [
+                    {
+                        "name": "Cogs",
+                        "value": "- " + "\n- ".join([cog for cog in self.bot.cogs]),
+                    },
+                    {
+                        "name": "Commands",
+                        "value": "Use the following commands to manage these cogs:\n- `load <cog>`\n- `unload <cog>`\n- `reload <cog>`",
+                    },
+                ]
+
                 await command.log(
-                    f"Please provide a number to count to.",
-                    title="Count Error",
-                    msg_type="error",
+                    f"Cogs are the categories of commands that the bot uses.",
+                    title="Cog Management",
+                    msg_type="info",
+                    fields=fields,
                 )
                 return
-            edit = await command.log(
-                f"0/{count}",
-                title="Counting",
-                msg_type="info",
-            )
-            for i in range(count):
-                edit = await command.log(
-                    f"{i+1}/{count}",
-                    title="Counting",
-                    msg_type="info",
-                    edit=edit,
-                )
-                if edit.reactions:
-                    edit = await command.log(
-                        f"Counting stopped at {i+1}/{count}",
-                        title="Counting",
-                        msg_type="info",
-                        edit=edit,
-                    )
-                    break
+            else:
+                cog = " ".join(command.query.split(" ")[1:]).strip()
+                confirm = False
+                if "-y" in cog:
+                    cog = cog.replace("-y", "").strip()
+                    confirm = True
 
+                if action == "unload" or action == "reload":
+                    if cog == "ShellHandler" and (not confirm or action == "reload"):
+                        if action == "reload":
+                            await command.log(
+                                f"You cannot reload the ShellHandler cog as doing so will result in the shell being unloaded but not reloaded. If you wish to unload the shell, use the `unload` command.",
+                                title="Cog Management",
+                                msg_type="error",
+                            )
+                            return
+
+                        await command.log(
+                            f"Are you sure you want to {action} the ShellHandler cog? This could cause the shell to stop working. You will need to restart the bot to fix this. To confirm, run the command again with `-y` at the end.",
+                            title="Cog Management",
+                            msg_type="warning",
+                        )
+                        return
+
+                    if cog not in self.bot.cogs:
+                        await command.log(
+                            f"Cog `{cog}` is not loaded or does not exist.",
+                            title="Cog Management",
+                            msg_type="error",
+                        )
+                        return
+
+                    try:
+                        cog_class = await self.bot.remove_cog(cog)
+                        if action == "reload":
+                            await command.log(
+                                f"Cog `{cog}` has been unloaded, loading...",
+                                title="Cog Management",
+                                msg_type="info",
+                            )
+                        else:
+                            await command.log(
+                                f"Cog `{cog}` has been unloaded.",
+                                title="Cog Management",
+                                msg_type="success",
+                            )
+                            if cog == "ShellHandler":
+                                await command.raw("Farewell 👋 :(")
+                            return
+
+                    except Exception as e:
+                        await command.log(
+                            f"An error occurred while unloading cog `{cog}`: {e}",
+                            title="Cog Management",
+                            msg_type="error",
+                        )
+                        return
+
+                if action == "load" or action == "reload":
+                    try:
+                        cache = self.bot.cog_cache
+
+                        if action == "load":
+                            if cog in cache:
+                                cog_class = cache[cog]
+                            else:
+                                await command.log(
+                                    f"Could not find cog `{cog}` in cached cogs. Tip: To add a cog to the cache, use the `add_cog_unloaded` method in the core.",
+                                    title="Cog Management",
+                                    msg_type="error",
+                                )
+                                return
+
+                        await self.bot.add_cog(cog_class)
+                        await command.log(
+                            f"Cog `{cog}` has been {action}ed.",
+                            title="Cog Management",
+                            msg_type="success",
+                        )
+                    except Exception as e:
+                        await command.log(
+                            f"An error occurred while {action}ing cog `{cog}`: {e}",
+                            title="Cog Management",
+                            msg_type="error",
+                        )
+                    return
+                
+        elif command.name == "die":
+            # Kill the bot
+            if "-y" in command.query:
+                await command.log(
+                    f"Shutting down...",
+                    title="Bot Shutdown",
+                    msg_type="info",
+                )
+                print("[Core.ShellHandler] -> [Command.Die] Shutting down...")
+                await self.bot.close()
+                return
+            await command.log(
+                f"Are you sure you want to shut down the bot? To confirm, run the command again with `-y` at the end.",
+                title="Bot Shutdown",
+                msg_type="warning",
+            )
             return
 
         await command.log(preset="CogNoCommandError")
@@ -555,4 +650,3 @@ class ShellHandler(commands.Cog):
     async def cog_status(self):
         """Cog status check"""
         return f"Running\nChannel: {self.core.channel.mention}\nInteractive Mode: {self.core.interactive_mode}"
-
