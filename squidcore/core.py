@@ -50,6 +50,7 @@ class Bot(commands.Bot):
         self.name = name
         self.shell_channel = shell_channel
         self.has_db = False
+        self.db = None
         
         self.cog_cache = {}
 
@@ -64,7 +65,7 @@ class Bot(commands.Bot):
         )
 
         # Load cogs
-        print("[Core] Loading cogs...")
+        print("[Core] Loading built-in cogs")
         asyncio.run(self._load_cogs())
         print("[Core] Cogs loaded")
 
