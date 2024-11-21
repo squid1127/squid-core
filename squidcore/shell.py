@@ -483,7 +483,7 @@ class ShellHandler(commands.Cog):
                     )
 
             await command.log(
-                f"{self.bot.user.name.title()} is currently online and operational.",
+                f"{self.bot.user.name.title()} is currently online and operational. {len(fields)} cogs loaded.{' Running as Docker container' if self.bot.is_docker() else ''}",
                 title="Bot Status",
                 fields=fields,
                 msg_type="success",

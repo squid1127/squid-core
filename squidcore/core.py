@@ -6,6 +6,10 @@ from discord.ext import commands, tasks
 # Async Packages for discord & rest apis
 import asyncio
 
+# System/OS Packages
+import os
+from pathlib import Path
+
 # * Internal Packages & Imports
 from .shell import ShellCore, ShellHandler, ShellCommand  # Shell
 from .db import *  # Database
@@ -162,3 +166,9 @@ class Bot(commands.Bot):
         await self.add_cog(ShellHandler(self, self.shell))
         await self.add_cog(ImpersonateGuild(self, self.shell))
         await self.add_cog(ImpersonateDM(self, self.shell))
+
+    def is_docker(self):
+        """Check if the bot is running in a Docker container"""
+
+        cgroup = Path('/proc/self/cgroup')
+        return Path('/.dockerenv').is_file() or cgroup.is_file() and 'docker' in cgroup.read_text()
