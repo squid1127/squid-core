@@ -7,6 +7,8 @@ from .shell import ShellCore, ShellCommand
 import math
 import time
 
+import datetime, timedelta
+
 
 class ImpersonateCore:
     def __init__(self, bot: commands.Bot, shell: ShellCore):
@@ -79,7 +81,7 @@ class ImpersonateCore:
                         title="Impersonate Thread Cleanup",
                         cog="ImpersonateCore",
                     )
-
+        
         thread_names = {}
         for thread in threads:
             name = thread.name.split("//")[1]
@@ -98,6 +100,46 @@ class ImpersonateCore:
 
             return self.active_threads_dm
     
+    async def generate_embeds(self, message: discord.Message) -> list[discord.Embed]:
+        """Generate embeds for a given message."""
+        embeds = []
+
+        if message.reference:
+            ref_message = await message.channel.fetch_message(message.reference.message_id)
+            ref_embed = discord.Embed(
+                description=(ref_message.content if ref_message.content else "Empty message."),
+                title="Replying to:",
+                color=discord.Color.red(),
+            )
+            ref_embed.set_author(
+                name=ref_message.author.display_name,
+                icon_url=ref_message.author.avatar.url,
+            )
+            embeds.append(ref_embed)
+            if ref_message.embeds:
+                for embed in ref_message.embeds:
+                    embeds.append(embed)
+
+        msg_embed = discord.Embed(
+            description=message.content if message.content else "Empty message.",
+            color=discord.Color.blurple(),
+        )
+        msg_embed.set_author(
+            name=message.author.display_name,
+            icon_url=message.author.avatar.url,
+        )
+        msg_embed.set_footer(
+            text=f"||MSGID.{message.id}||",
+        )
+        msg_embed.timestamp = message.created_at
+        embeds.append(msg_embed)
+
+        if message.embeds:
+            for embed in message.embeds:
+                embeds.append(embed)
+
+        return embeds
+
     async def handle(
         self, message: discord.Message = None, incoming: bool = False, dm: bool = False
     ):
@@ -132,43 +174,7 @@ class ImpersonateCore:
                 files = None
 
             # Embeds + Embedded Message & Reply handling
-            embeds = []
-
-            if message.reference:
-                ref_message = await channel.fetch_message(message.reference.message_id)
-
-                ref_embed = discord.Embed(
-                    description=(
-                        ref_message.content if ref_message.content else "Empty message."
-                    ),
-                    title="Replying to:",
-                    color=discord.Color.red(),
-                )
-                ref_embed.set_author(
-                    name=ref_message.author.display_name,
-                    icon_url=ref_message.author.avatar.url,
-                )
-                embeds.append(ref_embed)
-                if ref_message.embeds:
-                    for embed in ref_message.embeds:
-                        embeds.append(embed)
-
-            msg_embed = discord.Embed(
-                description=message.content if message.content else "Empty message.",
-                color=discord.Color.blurple(),
-            )
-            msg_embed.set_author(
-                name=message.author.display_name,
-                icon_url=message.author.avatar.url,
-            )
-            msg_embed.set_footer(
-                text=f"||MSGID.{message.id}||",
-            )
-            embeds.append(msg_embed)
-
-            if message.embeds:
-                for embed in message.embeds:
-                    embeds.append(embed)
+            embeds = await self.generate_embeds(message)
 
             if len(embeds) > 10:
                 # Split the embeds into chunks of 10
@@ -306,6 +312,13 @@ class ImpersonateCore:
             thread = await message.create_thread(
                 name=name_readable, auto_archive_duration=60
             )
+            
+            # Populate the thread
+            if user is None:
+                await self.populate_thread(thread, channel=channel)
+            else:
+                await self.populate_thread(thread, user=user)
+            
             print("[Impersonate] Thread created, updating active threads.")
             await self.active_threads(guildMode=(user is None), forceUpdate=True)
             await thread.send(
@@ -333,6 +346,50 @@ class ImpersonateCore:
                 await thread.delete()
             await self.active_threads(guildMode=False, forceUpdate=True)
 
+    async def populate_thread(self, thread: discord.Thread, channel: discord.TextChannel=None, user: discord.User=None, hours :int = 24):
+        """Populate a thread with messages from a channel.
+        
+        Args:
+            thread (discord.Thread): The thread to populate.
+            channel (discord.TextChannel): The channel to populate the thread with. (Channel mode)
+            user (discord.User): The user to populate the thread with. (DM mode)
+            hours (int): The number of hours to populate the thread with. Use None to populate all messages.
+        
+        Returns:
+            discord.Thread: The populated thread.
+        """
+        
+        if channel is None and user is None:
+            raise ValueError("No channel or user specified.")
+        
+        if channel is None and user is not None:
+            channel = user.dm_channel
+            
+        # Retrieve messages
+        messages = []
+        async for message in channel.history(limit=None, after=(datetime.datetime.now() - datetime.timedelta(hours=hours))):
+            messages.append(message)
+        
+        if not messages:
+            return thread
+        
+        # Sort messages by time
+        messages.sort(key=lambda message: message.created_at)
+        
+        # Populate the thread
+        for message in messages:
+            try:
+                embeds = await self.generate_embeds(message)
+                await thread.send(
+                    content="",
+                    embeds=embeds,
+                    files=[await attachment.to_file() for attachment in message.attachments],
+                )
+            except Exception as e:
+                await self.shell.log(f"Failed to populate thread: {e}", title="Impersonation Thread Population Error", cog="ImpersonateCore")
+                break
+            
+        return thread
 
 class ImpersonateGuild(commands.Cog):
     def __init__(self, bot: commands.Bot, shell: ShellCore):
