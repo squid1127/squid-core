@@ -22,7 +22,199 @@ import datetime
 import random
 
 
+class DatabaseItem:
+    """Represents an item in a database table, useful for fetching and modifying data"""
+
+    def __init__(self, table: "DatabaseTable", refrence_key: str, refrence_value: str):
+        self.table = table
+        self.data = None
+        self.refrence_key = refrence_key
+        self.refrence_value = refrence_value
+
+    async def update(self, data: dict):
+        """Update the item"""
+        if not await self.check_exsists():
+            print("[Core.Database] Item does not exist -- Creating new item")
+            await self.table.insert(data)
+            print("[Core.Database] Item created")
+            return await self.fetch_data()
+
+        print("[Core.Database] Item exists -- Updating item")
+        await self.table.update(
+            data, {self.refrence_key: self.refrence_value}
+        )
+        print("[Core.Database] Item updated")
+        return await self.fetch_data()        
+
+    async def delete(self):
+        """Delete the item"""
+        try:
+            self.fetch_data()
+        except ValueError:
+            raise ValueError("Item does not exist")
+
+        await self.table.delete({self.refrence_key: self.refrence_value})
+        return True
+
+    async def fetch_data(self):
+        """Fetch the data for the item"""
+        print(f"[Core.Database] Fetching data for {self.table} -> {self.refrence_key} -> {self.refrence_value}")
+        result = await self.table.fetch(
+            {self.refrence_key: self.refrence_value}
+        )
+
+        if len(result) > 1:
+            raise Exception("Multiple items found for specified refrence key")
+        if not result or len(result) == 0:
+            raise ValueError("Item does not exist")
+
+        self.data = result[0]
+
+        return self.data
+    
+    async def check_exsists(self) -> bool:
+        """Check if the item exists"""
+        result = await self.table.fetch(
+            {self.refrence_key: self.refrence_value}
+        )
+
+        return len(result) == 1
+
+    def __str__(self) -> str:
+        return f"Item {self.refrence_key} -> {self.refrence_value} in {self.table}"
+
+    def __repr__(self) -> str:
+        return f"DatabaseItem({self.table}, {self.refrence_key}, {self.refrence_value})"
+
+
 class DatabaseTable:
+    """(v2) Represents a table in a database schema, including its columns"""
+
+    def __init__(self, schema: "DatabaseSchema", name: str):
+        self.schema = schema
+        self.name = name
+        self.columns = []
+
+        self.random = int(random.random() * 10**10)
+
+    # * Core Functions | Basic Queries
+
+    async def fetch(self, filters: dict = None):
+        """Fetch data from the table"""
+        if filters:
+            # Convert filter dictionary to SQL string (with placeholders)
+            filter_string = " AND ".join(
+                [f"{key} = '{value}'" for key, value in filters.items()]
+            )
+
+            # Execute query
+            result = await self.schema.db.core.query(
+                f"SELECT * FROM {self.schema}.{self} WHERE {filter_string}"
+            )
+
+            # Convert to list of dictionaries
+            data = self.schema.db.core.table_to_list_dict(result)
+            return data
+
+        # Fetch all data
+        result = await self.schema.db.core.query(f"SELECT * FROM {self.schema}.{self}")
+        data = self.schema.db.core.table_to_list_dict(result)
+        return data
+
+    async def insert(self, data: dict):
+        """Insert data into the table"""
+        # Configure placeholders
+        placeholders = ", ".join(["${}".format(i + 1) for i in range(len(data))])
+        columns = ", ".join(data.keys())
+        values = list(data.values())
+
+        # Execute query
+        await self.schema.db.core.execute(
+            f"INSERT INTO {self.schema}.{self} ({columns}) VALUES ({placeholders})",
+            *values,
+        )
+
+        return True
+
+    async def update(self, data: dict, filters: dict):
+        """Update data in the table"""
+        # Configure placeholders
+        set_placeholders = ", ".join([f"{key} = ${i+1}" for i, key in enumerate(data.keys())])
+        filter_placeholders = " AND ".join([f"{key} = ${i+1+len(data)}" for i, key in enumerate(filters.keys())])
+        values = list(data.values()) + list(filters.values())
+
+        # Execute query
+        await self.schema.db.core.execute(
+            f"UPDATE {self.schema}.{self} SET {set_placeholders} WHERE {filter_placeholders}",
+            *values
+        )
+
+        return True
+
+    async def delete(self, filters: dict):
+        """Remove data from the table"""
+        # Configure filter
+        filter_string = " AND ".join(
+            [f"{key} = '{value}'" for key, value in filters.items()]
+        )
+
+        # Execute query
+        await self.schema.db.core.execute(
+            f"DELETE FROM {self.schema}.{self} WHERE {filter_string}"
+        )
+
+        return True
+    
+    def __str__(self) -> str:
+        return self.name
+    
+
+    # * Indexing
+
+    async def get_columns(self):
+        """Get all columns in the table"""
+        result = await self.schema.db.core.query(
+            f"""
+            SELECT column_name, data_type
+            FROM information_schema.columns
+            WHERE table_name = '{self.name}';
+            """
+        )
+
+        self.columns = self.schema.db.core.table_to_list_dict(result)
+
+        return self.columns
+
+    async def index_all(self):
+        """Subcommand of index all"""
+        print(f"[Core.Database] Indexing -> {self.schema} -> {self.name}")
+        await self.get_columns()
+        for column in self.columns:
+            print(
+                f"[Core.Database] Indexing -> {self.schema} -> {self.name} -> {column.get('column_name')}"
+            )
+
+        return self
+
+    # * Working with Items
+    async def get_item(self, value: str, refrence_key: str = "id") -> DatabaseItem:
+        """Get an item by a refrence key. This instance will not check if the item exists or fetch data"""
+        return DatabaseItem(self, refrence_key, value)
+
+    async def get_items(self, filters: dict, refrence_key: str = "id") -> list:
+        """Get a list of items based on filters"""
+        data = await self.fetch(filters)
+        items = []
+
+        for item in data:
+            items.append(DatabaseItem(self, refrence_key, item.get(refrence_key)))
+
+        return items
+
+
+class DatabaseTableV1:
+    """Represents a table in a database schema, including its columns"""
+
     def __init__(self, schema: "DatabaseSchema", name: str):
         self.schema = schema
         self.name = name
@@ -186,7 +378,7 @@ class DatabaseTable:
 
         # Cache the result
         self._cache_filter[filter_string] = {"result": data, "time": time.time()}
-        
+
         return data
 
     def clear_cache(self):
@@ -204,6 +396,8 @@ class DatabaseTable:
 
 
 class DatabaseSchema:
+    """Represents a database schema, including its tables"""
+
     def __init__(self, db: "DatabaseObject", name: str):
         self.db = db
         self.name = name
@@ -276,6 +470,8 @@ class DatabaseSchema:
 
 
 class DatabaseObject:
+    """Represents a database, including its schemas"""
+
     def __init__(self, core: "DatabaseCore", ignore_schema: list = []):
         self.core = core
         self.schemas = {}
@@ -334,6 +530,8 @@ class DatabaseObject:
 
 
 class DatabaseCore:
+    """Core database class for managing the database connection and data"""
+
     def __init__(
         self,
         bot: commands.Bot,
@@ -553,6 +751,101 @@ class DatabaseCore:
         return self.table_to_dict(data)
 
 
+class DiscordEntry(DatabaseItem):
+    """
+    Represents a Discord entity in the database, including any configuration and associated data (e.g. guild, channel, member)
+
+    Attributes:
+        db (DatabaseCore): The database core object.
+        id (int): The ID of the entity.
+        table (DatabaseTable): The table object associated with the entity.
+        type (str): The type of entity (guild, channel, member).
+        name (str): The name of the entity.
+        discord (discord.Object): The Discord object associated with the entity.
+    """
+
+    def __init__(
+        self,
+        # Database Attributes
+        db: DatabaseCore,
+        table: DatabaseTable,
+        # Discord Attributes
+        id: int,
+        type: Literal["guild", "channel", "member"],
+        parent_id: int = None,
+    ):
+        self.db_core = db
+        self.id = id
+        self.table = table
+        self.db_data = DatabaseItem(table, "id", id)
+        self.type = type
+
+        self.parent = None
+        self.discord = None
+
+        if type == "channel":
+            self.parent_id = parent_id
+            if not self.parent_id:
+                raise Exception("Channel entry must have a parent ID (guild ID)")
+
+    async def pull_discord(self):
+        """Fetch the data from Discord"""
+        if self.type == "guild":
+            self.discord = self.db_core.bot.get_guild(self.id)
+
+        elif self.type == "channel":
+            self.parent = self.db_core.bot.get_guild(self.parent_id)
+            if not self.parent:
+                return None
+            self.discord = self.parent.get_channel(self.id)
+
+        elif self.type == "member":
+            self.discord = self.db_core.bot.get_user(self.id)
+
+        if self.discord:
+            self.name = self.discord.name
+
+        return self.discord
+
+    async def pull_db(self):
+        """Fetch the data from the database"""
+        return await self.db_data.fetch_data()
+
+    async def push_db(self, data: dict):
+        """Push data to the database"""
+        return await self.db_data.update(data)
+
+    async def discord_to_db(self):
+        """Sync the Discord data with the database"""
+        await self.pull_discord()
+        data = {}
+        
+        data_exists = await self.db_data.check_exsists()
+        
+        if self.type == "guild":
+            if not data_exists:
+                data["id"] = self.id
+            
+            data["name"] = self.discord.name
+            data["owner_id"] = self.discord.owner_id
+        elif self.type == "channel":
+            if not data_exists:
+                data["id"] = self.id
+                data["guild_id"] = self.parent_id
+            
+            data["name"] = self.discord.name
+            data["type"] = str(self.discord.__class__)
+        elif self.type == "member":
+            if not data_exists:
+                data["id"] = self.id
+            data["username"] = self.discord.name
+            data["discriminator"] = self.discord.discriminator
+            
+            
+        print(f"[Core.Database.ServerData] Syncing {self.type} {self.id} -> {data}")
+        await self.push_db(data)
+
+
 class DiscordData:
     """Specialized class for managing Discord data, such as servers, channels, and members"""
 
@@ -563,10 +856,6 @@ class DiscordData:
         self.guild_table_object = self.schema_object.get_table(self.GUILD_TABLE)
         self.channel_table_object = self.schema_object.get_table(self.CHANNEL_TABLE)
         self.member_table_object = self.schema_object.get_table(self.MEMBER_TABLE)
-
-        self._guilds = {}
-        self._channels = {}
-        self._members = {}
 
     SCHEMA = "server_data"
     GUILD_TABLE = "guilds"
@@ -616,34 +905,90 @@ class DiscordData:
             await self.db.execute(self.POSTGRES)
             return True
 
-    async def get_guild(self, id: int, create: bool = True) -> 'DBDiscordGuild':
-        """
-        Asynchronously retrieves a guild by its ID.
-        If the guild is already cached in the internal dictionary, it returns the cached guild.
-        Otherwise, it fetches the guild data from the database, creates a new DBDiscordGuild object,
-        caches it, and then returns it.
-        Args:
-            id (int): The ID of the guild to retrieve.
-        Returns:
-            DBDiscordGuild or None: The guild object if found, otherwise None.
-        """
-
-        if id in self._guilds:
-            return self._guilds[id]
-
-        if not create:
-            data = await self.guild_table_object.get({"id": id})
-            if not data:
+    def get_entry(
+        self,
+        id: int = None,
+        type: Literal["guild", "channel", "member"] = None,
+        parent_id: int = None,
+        obj=None,
+    ):
+        """Get a Discord entry by ID or object"""
+        if obj:
+            # print(f"[Core.Database.ServerData] Debug -> Object class: {obj.__class__}")
+            if isinstance(obj, discord.Guild):
+                return DiscordEntry(
+                    db=self.db,
+                    table=self.guild_table_object,
+                    id=obj.id,
+                    type="guild",
+                )
+            elif isinstance(obj, discord.TextChannel):
+                return DiscordEntry(
+                    db=self.db,
+                    table=self.channel_table_object,
+                    id=obj.id,
+                    type="channel",
+                    parent_id=obj.guild.id,
+                )
+            elif isinstance(obj, discord.User) or isinstance(obj, discord.Member):
+                return DiscordEntry(
+                    db=self.db,
+                    table=self.member_table_object,
+                    id=obj.id,
+                    type="member",
+                )
+            else:
                 return None
 
-        guild = DBDiscordGuild(self.db, id, self.guild_table_object)
-        await guild.sync()
+        if type == "guild":
+            return DiscordEntry(
+                db=self.db,
+                table=self.guild_table_object,
+                id=id,
+                type="guild",
+            )
+        elif type == "channel":
+            return DiscordEntry(
+                db=self.db,
+                table=self.channel_table_object,
+                id=id,
+                type="channel",
+                parent_id=parent_id,
+            )
+        elif type == "member":
+            return DiscordEntry(
+                db=self.db,
+                table=self.member_table_object,
+                id=id,
+                type="member",
+            )
 
-        self._guilds[id] = guild
-        return guild
+    async def register(
+        self,
+        guild: discord.Guild = None,
+        user: discord.User = None,
+        channel: discord.TextChannel = None,
+    ):
+        """Universal registration function for Discord data"""
+        if guild:
+            guild_entry = self.get_entry(obj=guild)
+            if guild_entry:
+                await guild_entry.discord_to_db()
+
+        if channel:
+            channel_entry = self.get_entry(obj=channel)
+            if channel_entry:
+                await channel_entry.discord_to_db()
+
+        if user:
+            user_entry = self.get_entry(obj=user)
+            if user_entry:
+                await user_entry.discord_to_db()
 
 
 class DatabaseHandler(commands.Cog):
+    """Cog for intergrating the database with the bot"""
+
     def __init__(self, bot: commands.Bot, core: DatabaseCore, shell: ShellCore):
         self.core = core
         self.bot = bot
@@ -693,47 +1038,30 @@ class DatabaseHandler(commands.Cog):
         self.core.indexed = True
 
     # * Discord Data -- Automatic Registration
-    # General registration
-    async def register(
-        self,
-        guild: discord.Guild = None,
-        user: discord.User = None,
-        channel: discord.TextChannel = None,
-    ):
-        """Register a user, guild, or member to the database"""
-        if guild:
-            guild_entry = await self.core.discord.get_guild(guild.id, create=True)
-
-        # try:
-        #     guild_entry = await self.core.discord.get_guild(guild.id, create=True)
-        # except Exception as e:
-        #     print(f"[Core.Database] Error registering guild {guild.name} ({guild.id}): {e}")
-        #     await self.shell.log(
-        #         f"Error registering guild {guild.name} ({guild.id}): {e}",
-        #         title="Database Registration Error",
-        #         msg_type="error",
-        #         cog="DatabaseHandler",
-        #     )
-
-        if user:
-            pass
-        if channel:
-            pass
-
-    # Listen to join events
+    # Listen to on message (Temporary -- Should listen to join events instead)
     @commands.Cog.listener()
-    async def on_guild_join(self, guild):
-        await self.register(guild=guild)
+    async def on_message(self, message: discord.Message):
 
-    @commands.Cog.listener()
-    async def on_member_join(self, member):
-        await self.register(member=member, guild=member.guild)
+        if not self.core.working:
+            return
 
-    @commands.Cog.listener()
-    async def on_message(self, message):
-        await self.register(
-            user=message.author, guild=message.guild, channel=message.channel
-        )
+        try:
+            if message.guild:
+                await self.core.discord.register(guild=message.guild)
+
+            if isinstance(message.channel, discord.TextChannel):
+                await self.core.discord.register(channel=message.channel)
+
+            if message.author:
+                await self.core.discord.register(user=message.author)
+        except Exception as e:
+            print(f"[Core.Database] Error registering Discord data: {e}")
+            await self.shell.log(
+                "Error registering Discord data",
+                title="Database Error (Discord Data)",
+                msg_type="error",
+                cog="DatabaseHandler",
+            )
 
     # Cog Status
     async def cog_status(self) -> str:
@@ -824,95 +1152,3 @@ class DatabaseHandler(commands.Cog):
     #         await command.raw(f"Tables:\n```python\n{tables}\n```")
     #     except Exception as e:
     #         await command.raw(f"Error:\n```python\n{e}\n```")
-
-
-# Discord data (servers, channels, members)
-class DBDiscordGuild:
-    """Represents a Discord guild in the database, including any configuration and associated data"""
-
-    def __init__(self, db: DatabaseCore, id: int, table: DatabaseTable):
-        self.db = db
-        self.id = id
-        self.table = table
-
-        self.name = None
-        self.discord = None
-
-    async def update_discord(self):
-        """Update the data from Discord"""
-        # Check if the guild exists
-        guild = self.db.bot.get_guild(self.id)
-        if not guild:
-            return False
-
-        # Update the guild name
-        self.name = guild.name
-        self.discord = guild
-
-        self.locked = None
-        self.options = None
-        self.info = None
-
-        return True
-
-    async def sync(self):
-        """Sync the guild data with the database and Discord"""
-        try:
-            await self.update_discord()
-        except:
-            print(
-                f"[Core.Database.ServerData] Warning: Failed to fetch guild info for {self.id}"
-            )
-
-        # Check if the guild exists
-        if not self.db.working:
-            raise Exception("Database not ready")
-
-        data = await self.table.get({"id": self.id})
-        print(
-            f"[Core.Database.ServerData] Fetched guild data for {self.name} ({self.id}) -> {data}"
-        )
-        
-        print(f"[Core.Database.ServerData] Fetched guild data for {self.name} ({self.id}) -> {data}")
-        
-        
-        if data is None or len(data) == 0:
-            print(
-                f"[Core.Database.ServerData] Guild {self.name} ({self.id}) not found in database; registering"
-            )
-            if self.name == None:
-                raise Exception("Unable to register guild; could not fetch guild data")
-            # Add the guild to the database
-            await self.table.insert(
-                {
-                    "id": self.id,
-                    "name": self.name,
-                    "owner_id": self.discord.owner_id if self.discord else None,
-                }
-            )
-
-            print(f"[Core.Database.ServerData] Added guild {self.name} ({self.id})")
-            
-            return True
-
-        # Update the guild data
-        if self.locked is None:
-            self.locked = data[0]["locked"]
-        elif self.locked != data[0]["locked"]:
-            print(
-                f"[Core.Database.ServerData] Warning: Guild {self.name} ({self.id}) locked status mismatch"
-            )
-        if self.options is None:
-            self.options = data[0]["options"]
-        elif self.options != data[0]["options"]:
-            print(
-                f"[Core.Database.ServerData] Warning: Guild {self.name} ({self.id}) options mismatch"
-            )
-        if self.info is None:
-            self.info = data[0]["info"]
-        elif self.info != data[0]["info"]:
-            print(
-                f"[Core.Database.ServerData] Warning: Guild {self.name} ({self.id}) info mismatch"
-            )
-
-        return True
