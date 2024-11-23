@@ -981,6 +981,11 @@ class DiscordData:
                 await channel_entry.discord_to_db()
 
         if user:
+            # Ignore if webhook
+            if user.bot:
+                return
+            
+            
             user_entry = self.get_entry(obj=user)
             if user_entry:
                 await user_entry.discord_to_db()
@@ -1057,7 +1062,7 @@ class DatabaseHandler(commands.Cog):
         except Exception as e:
             print(f"[Core.Database] Error registering Discord data: {e}")
             await self.shell.log(
-                "Error registering Discord data",
+                f"Error registering Discord data: {e}",
                 title="Database Error (Discord Data)",
                 msg_type="error",
                 cog="DatabaseHandler",
@@ -1136,19 +1141,24 @@ class DatabaseHandler(commands.Cog):
                 preset="CogNoCommandError",
             )
 
-    # async def test_script(self, command: ShellCommand):
-    #     # Test script
-    #     try:
-    #         await command.raw("Testing script")
-
-    #         public = DatabaseSchema(self.core, "public")
-
-    #         if not await public.check_exsists():
-    #             await command.raw("Schema does not exist")
-    #             return
-    #         await command.raw("Schema exists")
-
-    #         tables = await public.get_tables()
-    #         await command.raw(f"Tables:\n```python\n{tables}\n```")
-    #     except Exception as e:
-    #         await command.raw(f"Error:\n```python\n{e}\n```")
+    async def test_script(self, command: ShellCommand):
+        # Test script
+        try:
+            await command.raw("Testing script")
+            await command.raw("Fetching server_data.guilds")
+            
+            schema = self.core.data.get_schema("server_data")
+            table = schema.get_table("guilds")
+            
+            data = await table.fetch()
+            
+            await command.raw(f"Data: \n```python\n{data}\n```")
+            
+            table_channels = schema.get_table("channels")
+            data_channels = await table_channels.fetch()
+            
+            await command.raw(f"Channels: \n```python\n{data_channels}\n```")
+            
+            
+        except Exception as e:
+            await command.log(f"Error: {e}")
