@@ -413,7 +413,9 @@ class ImpersonateGuild(commands.Cog):
         print("[ImpersonateGuild] Ready, starting tasks.")
 
     async def cog_status(self):
-        return f"Ready: Listening to {self.core.active_threads(guildMode=True)} active channels."
+        active_threads = await self.core.active_threads(guildMode=True)
+        
+        return f"Ready: Listening to {len(active_threads[0])} guild channels."
 
     @commands.Cog.listener()
     async def on_message(self, message: discord.Message):
@@ -456,7 +458,8 @@ class ImpersonateGuild(commands.Cog):
             query = command.query
             print("[ImpersonateGuild] Thread requseted with query:", query)
             
-            if query == "clear":
+            #* Special commands
+            if query == "!clear":
                 try:
                     await self.core.clear(guild=True)
                 except Exception as e:
@@ -472,6 +475,43 @@ class ImpersonateGuild(commands.Cog):
                     msg_type="success",
                 )
                 return
+            elif query == "!list" or query == "!ls":
+                threads, thread_names = await self.core.active_threads(guildMode=True)
+                if not threads:
+                    await command.log(
+                        "No active guild threads found.",
+                        title="Guild Impersonation List",
+                        msg_type="info",
+                    )
+                    return
+                thread_list = []
+                for thread in threads:
+                    name = thread.name.split("//")[0]
+                    thread_list.append(name)
+                seperator = "\n- "
+                await command.log(
+                    f"Active guild threads: \n- {seperator.join(thread_list)}",
+                    title="Guild Impersonation List",
+                    msg_type="info",
+                )
+                return
+            elif query == "!update":
+                await self.core.active_threads(guildMode=True, forceUpdate=True)
+                await command.log(
+                    "Updated active guild threads.",
+                    title="Guild Impersonation Update",
+                    msg_type="success",
+                )
+                return
+            
+            elif query == "" or query is None or query == "!help":
+                await command.log(
+                    "Impersonate the bot in a guild channel. Accepted formats: Guild ID::Channel ID, Discord URL, or Channel Mention. Special commands: !clear, !list, !update.",
+                    title="Guild Impersonation Help",
+                    msg_type="info",
+                )
+                return
+                
 
             # Discord url parsing
             if query.startswith("https://discord.com/channels/"):
@@ -575,7 +615,9 @@ class ImpersonateDM(commands.Cog):
         print("[ImpersonateDM] Ready, starting tasks.")
 
     async def cog_status(self):
-        return f"Ready: Listening to {self.core.active_threads(guildMode=False)} users."
+        active_threads = await self.core.active_threads(guildMode=False)
+        
+        return f"Ready: Listening to {len(active_threads[0])} DMs."
 
     @commands.Cog.listener()
     async def on_message(self, message: discord.Message):
@@ -635,8 +677,10 @@ class ImpersonateDM(commands.Cog):
     async def shell_callback(self, command: ShellCommand):
         if command.name == "impersonate-dm" or command.name == "idm":
             query = command.query
-            
-            if query == "clear":
+            print("[ImpersonateDM] Thread requested with query:", query)
+
+            #* Special commands
+            if query == "!clear":
                 try:
                     await self.core.clear(dm=True)
                 except Exception as e:
@@ -652,9 +696,41 @@ class ImpersonateDM(commands.Cog):
                     msg_type="success",
                 )
                 return
-            
-            print("[ImpersonateDM] Looking for user -> ", query)
-            
+            elif query == "!list" or query == "!ls":
+                threads, thread_names = await self.core.active_threads(guildMode=False)
+                if not threads:
+                    await command.log(
+                        "No active DM threads found.",
+                        title="DM Impersonation List",
+                        msg_type="info",
+                    )
+                    return
+                thread_list = []
+                for thread in threads:
+                    name = thread.name.split("//")[0]
+                    thread_list.append(name)
+                seperator = "\n- "
+                await command.log(
+                    f"Active DM threads: \n- {seperator.join(thread_list)}",
+                    title="DM Impersonation List",
+                    msg_type="info",
+                )
+                return
+            elif query == "!update":
+                await self.core.active_threads(guildMode=False, forceUpdate=True)
+                await command.log(
+                    "Updated active DM threads.",
+                    title="DM Impersonation Update",
+                    msg_type="success",
+                )
+                return
+            elif query == "" or query is None or query == "!help":
+                await command.log(
+                    "DM a user as the bot. Accepted formats: @mention or username. Special commands: !clear, !list, !update.",
+                    title="DM Impersonation Help",
+                    msg_type="info",
+                )
+                return
 
             # Parse input
             if query.startswith("<@") and query.endswith(">"):
