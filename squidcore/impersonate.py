@@ -230,12 +230,27 @@ class ImpersonateCore:
                 if msg_id:
                     ref_message = await channel.fetch_message(msg_id)
 
-                    await ref_message.reply(
-                        message.content,
-                        embed=message.embeds[0] if message.embeds else None,
-                        files=files,
-                    )
-                    return
+                    try:
+                        await ref_message.reply(
+                            message.content,
+                            embed=message.embeds[0] if message.embeds else None,
+                            files=files,
+                        )
+                    except discord.Forbidden:
+                        if dm:
+                            await message.reply("They blocked me 😭 (Cannot send messages to user)")
+                        else:   
+                            await message.reply("I cannot send messages to this channel.")
+                            
+                        await message.add_reaction("❌")
+                            
+                    except Exception as e:
+                        await message.reply(f"Failed to send message: {e}")             
+                        await message.add_reaction("❌")
+                        
+                    else:
+                        await message.add_reaction("✅")  
+                        return   
 
             try:
                 await channel.send(
@@ -366,9 +381,13 @@ class ImpersonateCore:
             channel = user.dm_channel
             
         # Retrieve messages
-        messages = []
-        async for message in channel.history(limit=None, after=(datetime.datetime.now() - datetime.timedelta(hours=hours))):
-            messages.append(message)
+        try:
+            messages = []
+            async for message in channel.history(limit=None, after=(datetime.datetime.now() - datetime.timedelta(hours=hours))):
+                messages.append(message)
+        except AttributeError:
+            print("[Impersonate] No message history found.")
+            return thread
         
         if not messages:
             return thread
