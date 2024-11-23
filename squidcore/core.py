@@ -30,18 +30,10 @@ class Bot(commands.Bot):
         shell (ShellCore): The shell core instance for managing shell commands.
         db (DatabaseCore): The database core instance for managing database operations.
         static_status (Status): The static status to be set for the bot.
-    Methods:
-        __init__(token: str, name: str, shell_channel: int):
-            Initializes the bot with the given token, name, and shell channel.
-        add_db(postgres_connection: str, postgres_password: str = None, postgres_pool: int = 20):
-        set_status(random_status: list[Status] = None, static_status: Status = None):
-            Sets the status of the bot, either randomly from a list or a static status.
-        run():
-            Starts the bot.
-        _load_cogs():
-            Asynchronously loads the necessary cogs for the bot.
-        on_ready():
-            Event handler for when the bot is ready.
+    Args:
+        token (str): The token for the Discord bot.
+        name (str): The name of the Discord bot.
+        shell_channel (int): The ID of the shell channel.
     """
     
     def __init__(
