@@ -30,6 +30,10 @@ class ShellCore:
         """Start the shell (find the channel and start logging)"""
         try:
             self.channel = self.bot.get_channel(self.channel_id)
+            if not self.channel:
+                print(f"[Core.Shell] Shell channel {self.channel_id} not found!")
+                return
+        
             print("[Core.Shell] Shell channel found!")
             print("[Core.Shell] Starting logging...")
             await asyncio.sleep(1)
@@ -39,8 +43,12 @@ class ShellCore:
                 msg_type="success",
                 cog="Shell",
             )
-        except:
-            print("[Core.Shell] Shell channel not found!")
+        except AttributeError:
+            print(f"[Core.Shell] Shell channel {self.channel_id} not found! Attribute error.")
+            return
+        
+        except Exception as e:
+            print(f"[Core.Shell] Error starting shell: {e}")
             return
 
     def add_command(
