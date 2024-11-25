@@ -40,11 +40,9 @@ class DatabaseItem:
             return await self.fetch_data()
 
         print("[Core.Database] Item exists -- Updating item")
-        await self.table.update(
-            data, {self.refrence_key: self.refrence_value}
-        )
+        await self.table.update(data, {self.refrence_key: self.refrence_value})
         print("[Core.Database] Item updated")
-        return await self.fetch_data()        
+        return await self.fetch_data()
 
     async def delete(self):
         """Delete the item"""
@@ -58,10 +56,10 @@ class DatabaseItem:
 
     async def fetch_data(self):
         """Fetch the data for the item"""
-        print(f"[Core.Database] Fetching data for {self.table} -> {self.refrence_key} -> {self.refrence_value}")
-        result = await self.table.fetch(
-            {self.refrence_key: self.refrence_value}
+        print(
+            f"[Core.Database] Fetching data for {self.table} -> {self.refrence_key} -> {self.refrence_value}"
         )
+        result = await self.table.fetch({self.refrence_key: self.refrence_value})
 
         if len(result) > 1:
             raise Exception("Multiple items found for specified refrence key")
@@ -71,12 +69,10 @@ class DatabaseItem:
         self.data = result[0]
 
         return self.data
-    
+
     async def check_exsists(self) -> bool:
         """Check if the item exists"""
-        result = await self.table.fetch(
-            {self.refrence_key: self.refrence_value}
-        )
+        result = await self.table.fetch({self.refrence_key: self.refrence_value})
 
         return len(result) == 1
 
@@ -139,14 +135,18 @@ class DatabaseTable:
     async def update(self, data: dict, filters: dict):
         """Update data in the table"""
         # Configure placeholders
-        set_placeholders = ", ".join([f"{key} = ${i+1}" for i, key in enumerate(data.keys())])
-        filter_placeholders = " AND ".join([f"{key} = ${i+1+len(data)}" for i, key in enumerate(filters.keys())])
+        set_placeholders = ", ".join(
+            [f"{key} = ${i+1}" for i, key in enumerate(data.keys())]
+        )
+        filter_placeholders = " AND ".join(
+            [f"{key} = ${i+1+len(data)}" for i, key in enumerate(filters.keys())]
+        )
         values = list(data.values()) + list(filters.values())
 
         # Execute query
         await self.schema.db.core.execute(
             f"UPDATE {self.schema}.{self} SET {set_placeholders} WHERE {filter_placeholders}",
-            *values
+            *values,
         )
 
         return True
@@ -164,10 +164,9 @@ class DatabaseTable:
         )
 
         return True
-    
+
     def __str__(self) -> str:
         return self.name
-    
 
     # * Indexing
 
@@ -819,20 +818,20 @@ class DiscordEntry(DatabaseItem):
         """Sync the Discord data with the database"""
         await self.pull_discord()
         data = {}
-        
+
         data_exists = await self.db_data.check_exsists()
-        
+
         if self.type == "guild":
             if not data_exists:
                 data["id"] = self.id
-            
+
             data["name"] = self.discord.name
             data["owner_id"] = self.discord.owner_id
         elif self.type == "channel":
             if not data_exists:
                 data["id"] = self.id
                 data["guild_id"] = self.parent_id
-            
+
             data["name"] = self.discord.name
             data["type"] = str(self.discord.__class__)
         elif self.type == "member":
@@ -840,8 +839,7 @@ class DiscordEntry(DatabaseItem):
                 data["id"] = self.id
             data["username"] = self.discord.name
             data["discriminator"] = self.discord.discriminator
-            
-            
+
         print(f"[Core.Database.ServerData] Syncing {self.type} {self.id} -> {data}")
         await self.push_db(data)
 
@@ -984,11 +982,91 @@ class DiscordData:
             # Ignore if webhook
             if user.bot:
                 return
-            
-            
+
             user_entry = self.get_entry(obj=user)
             if user_entry:
                 await user_entry.discord_to_db()
+
+    async def index_all(self) -> tuple:
+        """Try to register all Discord data"""
+        log = []
+
+        try:
+
+            print("[Core.Database.ServerData] Indexing all Discord data")
+            log.append("Indexing all Discord data")
+            log.append("~" * 10)
+
+            print("[Core.Database.ServerData] Indexing guilds")
+            log.append("Indexing guilds")
+            guilds = self.db.bot.guilds
+
+            try:
+                for guild in guilds:
+                    try:
+                        await self.register(guild=guild)
+                    except Exception as e:
+                        print(f"[Core.Database.ServerData] Error indexing guild: {e}")
+                        log.append(f"[ERROR] Error indexing guild {guild.name}: {e}")
+
+            except Exception as e:
+                print(f"[Core.Database.ServerData] Error indexing guilds: {e}")
+                log.append("~" * 10)
+                log.append(f"[FATAL] Error indexing guilds: {e}")
+                return (False, log)
+
+            print("[Core.Database.ServerData] Indexing channels")
+            log.append("Indexing channels")
+            channels = self.db.bot.get_all_channels()
+
+            try:
+                for channel in channels:
+                    try:
+                        await self.register(channel=channel)
+                    except Exception as e:
+                        print(f"[Core.Database.ServerData] Error indexing channel: {e}")
+                        log.append(
+                            f"[ERROR] Error indexing channel {guild.name} -> {channel.name}: {e}"
+                        )
+
+            except Exception as e:
+                print(f"[Core.Database.ServerData] Error indexing channels: {e}")
+                log.append("~" * 10)
+                log.append(f"[FATAL] Error indexing channels: {e}")
+                return (False, log)
+
+            print("[Core.Database.ServerData] Indexing members")
+            log.append("Indexing members")
+            members = self.db.bot.get_all_members()
+
+            try:
+                for member in members:
+                    try:
+                        await self.register(user=member)
+                    except Exception as e:
+                        print(f"[Core.Database.ServerData] Error indexing member: {e}")
+                        log.append(f"[ERROR] Error indexing member {member.name}: {e}")
+
+            except Exception as e:
+                print(f"[Core.Database.ServerData] Error indexing members: {e}")
+                log.append("~" * 10)
+
+                log.append(f"[FATAL] Error indexing members: {e}")
+                return (False, log)
+
+            print("[Core.Database.ServerData] Indexing complete")
+            log.append("~" * 10)
+            log.append("Indexing completed successfully")
+
+            return (True, log)
+
+        except Exception as e:
+            print(f"[Core.Database.ServerData] Error indexing Discord data: {e}")
+            log.append("~" * 10)
+
+            log.append(f"[FATAL] Uncaught error: {e}")
+
+            return (False, log)
 
 
 class DatabaseHandler(commands.Cog):
@@ -1043,24 +1121,103 @@ class DatabaseHandler(commands.Cog):
         self.core.indexed = True
 
     # * Discord Data -- Automatic Registration
-    # Listen to on message (Temporary -- Should listen to join events instead)
+    # Listen to on guild join
     @commands.Cog.listener()
-    async def on_message(self, message: discord.Message):
-
+    async def on_guild_join(self, guild: discord.Guild):
         if not self.core.working:
             return
 
         try:
-            if message.guild:
-                await self.core.discord.register(guild=message.guild)
-
-            if isinstance(message.channel, discord.TextChannel):
-                await self.core.discord.register(channel=message.channel)
-
-            if message.author:
-                await self.core.discord.register(user=message.author)
+            await self.core.discord.register(guild=guild)
         except Exception as e:
-            print(f"[Core.Database] Error registering Discord data: {e}")
+            print(f"[Core.Database] Error when registering guild: {e}")
+            await self.shell.log(
+                f"Error registering Discord data: {e}",
+                title="Database Error (Discord Data)",
+                msg_type="error",
+                cog="DatabaseHandler",
+            )
+
+    # Listen to on channel create
+    @commands.Cog.listener()
+    async def on_guild_channel_create(self, channel: discord.TextChannel):
+        if not self.core.working:
+            return
+
+        try:
+            await self.core.discord.register(channel=channel)
+        except Exception as e:
+            print(f"[Core.Database] Error when registering channel: {e}")
+            await self.shell.log(
+                f"Error registering Discord data: {e}",
+                title="Database Error (Discord Data)",
+                msg_type="error",
+                cog="DatabaseHandler",
+            )
+
+    # Listen to on guild update
+    @commands.Cog.listener()
+    async def on_guild_update(self, before: discord.Guild, after: discord.Guild):
+        if not self.core.working:
+            return
+
+        try:
+            await self.core.discord.register(guild=after)
+        except Exception as e:
+            print(f"[Core.Database] Error when registering guild: {e}")
+            await self.shell.log(
+                f"Error registering Discord data: {e}",
+                title="Database Error (Discord Data)",
+                msg_type="error",
+                cog="DatabaseHandler",
+            )
+
+    # Listen to on channel create
+    @commands.Cog.listener()
+    async def on_guild_channel_create(self, channel: discord.TextChannel):
+        if not self.core.working:
+            return
+
+        try:
+            await self.core.discord.register(channel=channel)
+        except Exception as e:
+            print(f"[Core.Database] Error when registering channel: {e}")
+            await self.shell.log(
+                f"Error registering Discord data: {e}",
+                title="Database Error (Discord Data)",
+                msg_type="error",
+                cog="DatabaseHandler",
+            )
+
+    # Listen to on channel update
+    @commands.Cog.listener()
+    async def on_guild_channel_update(
+        self, before: discord.TextChannel, after: discord.TextChannel
+    ):
+        if not self.core.working:
+            return
+
+        try:
+            await self.core.discord.register(channel=after)
+        except Exception as e:
+            print(f"[Core.Database] Error when registering channel: {e}")
+            await self.shell.log(
+                f"Error registering Discord data: {e}",
+                title="Database Error (Discord Data)",
+                msg_type="error",
+                cog="DatabaseHandler",
+            )
+
+    # Listen to on member join
+    @commands.Cog.listener()
+    async def on_member_join(self, member: discord.Member):
+        if not self.core.working:
+            return
+
+        try:
+            await self.core.discord.register(user=member)
+        except Exception as e:
+            print(f"[Core.Database] Error when registering member: {e}")
             await self.shell.log(
                 f"Error registering Discord data: {e}",
                 title="Database Error (Discord Data)",
@@ -1117,6 +1274,61 @@ class DatabaseHandler(commands.Cog):
                 )
             elif subcommand == "test":
                 await self.test_script(command)
+
+            elif subcommand == "discord":
+                subsubcommand = (
+                    command.query.split(" ")[1]
+                    if " " in command.query
+                    else command.query
+                )
+                
+                if subsubcommand == "index-all":
+                    message = await command.log(
+                        "Indexing all Discord data...\nThis may take a while.",
+                        title="Discord Data Indexing",
+                        msg_type="info",
+                    )
+                    
+                    result, log = await self.core.discord.index_all()
+                    print(result, log)
+                    fields = [
+                        {
+                            "name": "Log",
+                            "value": "```" + "\n".join(log) + "```",
+                        },
+                    ]
+                    print("sigma")
+                    if result:
+                        await command.log(
+                            "Successfully indexed all Discord data.",
+                            title="Discord Data Indexing",
+                            msg_type="success",
+                            fields=fields,
+                            edit=message,
+                        )
+                    else:
+                        await command.log(
+                            "Failed to index all Discord data.",
+                            title="Discord Data Indexing",
+                            msg_type="error",
+                            fields=fields,
+                            edit=message,
+                        )
+                    return
+                fields = [
+                    {
+                        "name": "db discord index-all",
+                        "value": "Index all Discord data",
+                    },
+                ]
+                await command.log(
+                    "Manage Discord data. Here are the available Discord commands:",
+                    fields=fields,
+                    title="Discord Commands",
+                    msg_type="info",
+                )
+                return
+
             else:
                 # Do help command
                 fields = [
@@ -1128,9 +1340,13 @@ class DatabaseHandler(commands.Cog):
                         "name": "db get <table> [--dict]",
                         "value": "Get data from a table",
                     },
+                    {
+                        "name": "db discord",
+                        "value": "Manage Discord data",
+                    },
                 ]
                 await command.log(
-                    "Here are the available database commands:",
+                    "Manage database. Here are the available database commands:",
                     fields=fields,
                     title="Database Commands",
                     msg_type="info",
@@ -1146,19 +1362,18 @@ class DatabaseHandler(commands.Cog):
         try:
             await command.raw("Testing script")
             await command.raw("Fetching server_data.guilds")
-            
+
             schema = self.core.data.get_schema("server_data")
             table = schema.get_table("guilds")
-            
+
             data = await table.fetch()
-            
+
             await command.raw(f"Data: \n```python\n{data}\n```")
-            
+
             table_channels = schema.get_table("channels")
             data_channels = await table_channels.fetch()
-            
+
             await command.raw(f"Channels: \n```python\n{data_channels}\n```")
-            
-            
+
         except Exception as e:
             await command.log(f"Error: {e}")
