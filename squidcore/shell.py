@@ -174,15 +174,16 @@ class ShellCore:
         return msg_object
 
     def get_channel(self):
-        if self.channel:
-            return self.channel
-        else:
-            # Check if bot is ready
-            if not self.bot.is_ready():
-                return
+        """Get the shell channel"""
+        if hasattr(self, "channel"):
+            if self.channel:
+                return self.channel
+        # Check if bot is ready
+        if not self.bot.is_ready():
+            return
 
-            self.channel = self.bot.get_channel(self.channel_id)
-            return self.channel
+        self.channel = self.bot.get_channel(self.channel_id)
+        return self.channel
 
 
 class ShellCommand:
