@@ -3,3 +3,4 @@ asyncpg
 coloredlogs
 watchdog
 pyyaml
+timedelta
