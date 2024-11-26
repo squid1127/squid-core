@@ -21,6 +21,9 @@ import datetime
 # For testing; random string
 import random
 
+# Dict output
+import json
+
 
 class DatabaseItem:
     """Represents an item in a database table, useful for fetching and modifying data"""
@@ -840,6 +843,13 @@ class DiscordEntry(DatabaseItem):
             data["username"] = self.discord.name
             data["discriminator"] = self.discord.discriminator
 
+            # Guilds
+            guilds = self.discord.mutual_guilds
+            guild_list = [guild.id for guild in guilds]
+
+            # Convert to JSON
+            data["guilds"] = json.dumps(guild_list)
+
         print(f"[Core.Database.ServerData] Syncing {self.type} {self.id} -> {data}")
         await self.push_db(data)
 
@@ -854,6 +864,11 @@ class DiscordData:
         self.guild_table_object = self.schema_object.get_table(self.GUILD_TABLE)
         self.channel_table_object = self.schema_object.get_table(self.CHANNEL_TABLE)
         self.member_table_object = self.schema_object.get_table(self.MEMBER_TABLE)
+
+        self.interactive_state = {
+            "page": "main",
+            "subpage": None,
+        }
 
     SCHEMA = "server_data"
     GUILD_TABLE = "guilds"
@@ -1068,6 +1083,683 @@ class DiscordData:
 
             return (False, log)
 
+    async def interactive(self, command: ShellCommand, init=False, internal=False):
+        """Interactive mode for exploring Discord data"""
+
+        def process_query(query: str) -> dict:
+            """Process a query. Returns a dictionary with the query type and data if valid"""
+            query = query.split(":")
+            data = {
+                "failed": False,
+            }
+
+            if query[0] == "history":
+                data["action"] = "history"
+                data["type"] = None
+                return data
+
+            if query is None or len(query) == 0:
+                return {"failed": True, "error": "No query provided"}
+            elif len(query) == 1:
+                if query[0] == "guilds":
+                    data["type"] = "guild"
+                elif query[0] == "channels":
+                    data["type"] = "channel"
+                elif query[0] == "members":
+                    data["type"] = "member"
+                else:
+                    return {
+                        "failed": True,
+                        "error": "Invalid type specified for list all query",
+                    }
+                data["action"] = "list"
+
+            elif len(query) > 1:
+                if not query[0] in ["guild", "member"]:
+                    return {"failed": True, "error": "Invalid type specified for query"}
+                data["type"] = query[0]
+                data["action"] = "view"
+                # Check if ID is valid
+                try:
+                    data["id"] = int(query[1])
+                except:
+                    return {"failed": True, "error": "Invalid ID specified for query"}
+
+                if data["type"] == "guild" and len(query) > 2:
+                    if query[2] == "channels":
+                        data["action"] = "list_channels"
+                    elif query[2] == "members":
+                        data["action"] = "list_members"
+                    elif query[2] == "channel":
+                        data["action"] = "view"
+                        data["type"] = "channel"
+
+                        try:
+                            data["channel_id"] = int(query[3])
+                        except:
+                            return {
+                                "failed": True,
+                                "error": "Invalid channel ID specified for query",
+                            }
+                    else:
+                        return {
+                            "failed": True,
+                            "error": "Invalid action specified for guild query",
+                        }
+            return data
+
+        async def return_home():
+            """Return to the home page"""
+            self.interactive_state["page"] = "main"
+            self.interactive_state["subpage"] = None
+            self.interactive_state["query"] = None
+
+            await self.interactive(command, internal=True)
+            return
+
+        async def show_query(query: str, history=True) -> bool:
+            if self.interactive_state["debug"]:
+                await command.raw(f"Parsing query: {query}")
+            
+            result = process_query(query)
+            
+            if self.interactive_state["debug"]:
+                await command.raw(f"Query result: {result}")
+            
+            if result["failed"]:
+                await command.raw(f"Failed to parse query: {result['error']}")
+                return False
+
+            if result["action"] == "history":
+                self.interactive_state["page"] = "history"
+                self.interactive_state["subpage"] = None
+                self.interactive_state["query"] = None
+
+                await self.interactive(command, internal=True)
+                return True
+
+            self.interactive_state["query"] = result
+            self.interactive_state["page"] = "query"
+            self.interactive_state["subpage"] = result["action"]
+
+            if history:
+                self.interactive_state["history"].append(query)
+
+            await self.interactive(command, internal=True)
+            return True
+
+        if init:
+            self.interactive_state = {
+                "page": "main",
+                "subpage": None,
+                "query": None,
+                "debug": False,
+                "history": [],
+            }
+            command.query = None
+        if internal:
+            command.query = None
+
+        print(
+            f"[Core.Database.ServerData] Discord Data Explorer - Processing query: {command.query}"
+        )
+
+        if self.interactive_state.get("debug", False):
+            try:
+                fields = [
+                    {"name": "Query", "value": command.query},
+                    {
+                        "name": "Interactive State",
+                        "value": "```json\n"
+                        + json.dumps(self.interactive_state, indent=4)
+                        + "```",
+                    },
+                    {
+                        "name": "Page",
+                        "value": self.interactive_state["page"]
+                        + (
+                            " -> " + self.interactive_state["subpage"]
+                            if self.interactive_state.get("subpage")
+                            else ""
+                        ),
+                    },
+                ]
+            except:
+                fields = [
+                    {"name": "Query", "value": command.query},
+                    {
+                        "name": "Interactive State",
+                        "value": "```python\n"
+                        + str(self.interactive_state)
+                        + "```\n(Failed to convert to JSON)",
+                    },
+                    {
+                        "name": "Page",
+                        "value": self.interactive_state["page"]
+                        + (
+                            " -> " + self.interactive_state["subpage"]
+                            if self.interactive_state.get("subpage")
+                            else ""
+                        ),
+                    },
+                ]
+
+            try:
+                await command.log(
+                    (
+                        "Iinitial trigger"
+                        if init
+                        else ("Internal trigger" if internal else "User trigger")
+                    ),
+                    title="Discord Data Explorer - Debug",
+                    fields=fields,
+                )
+            except Exception as e:
+                await command.raw(f"Failed to log debug information: {e}")
+
+            try:
+                json_debug = {
+                    "query": command.query,
+                    "interactive_state": self.interactive_state,
+                    "init": init,
+                    "internal": internal,
+                    "page": self.interactive_state["page"],
+                    "subpage": self.interactive_state["subpage"],
+                }
+
+                # ALlow overwriting of debug file
+                json_file = f"./tmp/discord_data_explorer_debug.json"
+                with open(json_file, "w") as f:
+                    json.dump(json_debug, f, indent=4)
+            except Exception as e:
+                print(
+                    f"[Core.Database.ServerData] Discord Data Explorer - Debug: Failed to write debug file: {e}"
+                )
+
+        if self.interactive_state["page"] == "main":
+            # Remove unecessary data in interactive state
+            # new_state = {}
+            # for key in self.interactive_state:
+            #     if key not in ["page", "subpage", "query", "debug"]:
+            #         new_state[key] = self.interactive_state[key]
+            # self.interactive_state = new_state
+
+            if command.query:
+                if command.query.lower() == "debug":
+                    self.interactive_state["debug"] = not self.interactive_state.get(
+                        "debug", False
+                    )
+                    await command.raw(
+                        f"Debug mode {'enabled' if self.interactive_state['debug'] else 'disabled'}"
+                    )
+                    return
+
+                await show_query(command.query)
+                return
+
+            await command.raw(
+                """# Discord Data Explorer
+Welcome to the Discord data explorer! Enter a query to get started!
+### Queries
+- `guilds` - List all guilds
+  - `guild:<id>` - View a specific guild
+- `channels` - List all channels
+  - `guild:<id>:channels` - List all channels in a guild
+  - `guild:<id>:channel:<id>` - View a specific channel
+- `members` - List all members
+  - `guild:<id>:members` - List all members in a guild
+  - `member:<id>` - View a specific member
+- `history` - View the query history
+"""
+            )
+            return
+
+        if self.interactive_state["page"] == "query":
+            # Set default actions upon initialization
+            if (not self.interactive_state.get("query_actions")) or internal:
+                self.interactive_state["query_actions"] = [
+                    "return",
+                    "reload",
+                    "query",
+                    "back",
+                ]
+
+            # Process actions
+            action = (command.query.lower().split(" ")[0]) if not internal else None
+            try:
+                action = int(action)
+            except:
+                pass
+            # if action:
+            #     await command.raw(f"Action: {action}")
+
+            if action == "return":
+                await return_home()
+                return
+            elif action == "back":
+                if len(self.interactive_state["history"]) > 1:
+                    self.interactive_state["history"].pop(-1)
+                    await show_query(
+                        self.interactive_state["history"][-1], history=False
+                    )
+                else:
+                    await return_home()
+                return
+            elif action == "reload":
+                self.interactive_state["query_actions"] = [
+                    "return",
+                    "reload",
+                    "query",
+                    "back",
+                ]
+            elif (
+                action == "select" or isinstance(action, int)
+            ) and "select" in self.interactive_state["query_actions"]:
+                self.interactive_state["subpage"] = "view"
+                try:
+                    if isinstance(action, int):
+                        index = int(action)
+                    else:
+                        index = int(command.query.split(" ")[1])
+                    item = self.interactive_state["query_list_index_map"][index]
+                except:
+                    await command.raw("Invalid index specified")
+                    return
+
+                if (
+                    self.interactive_state["query"]["type"] == "guild"
+                    and self.interactive_state["query"]["action"] == "list"
+                ):
+                    await show_query(f"guild:{item}")
+
+                elif (
+                    self.interactive_state["query"]["type"] == "member"
+                    and self.interactive_state["query"]["action"] == "list"
+                ) or (
+                    self.interactive_state["query"]["type"] == "guild"
+                    and self.interactive_state["query"]["action"] == "list_members"
+                ):
+                    await show_query(f"member:{item}")
+
+                elif (
+                    self.interactive_state["query"]["type"] == "guild"
+                    and self.interactive_state["query"]["action"] == "list_channels"
+                ):
+                    guild_id = self.interactive_state["query"]["id"]
+                    await show_query(f"guild:{guild_id}:channel:{item}")
+
+                else:
+                    await command.raw(f"Invalid type for select action")
+
+            elif (
+                action == "attach"
+                and ("attach" in self.interactive_state["query_actions"])
+            ) or (action == "dm" and ("dm" in self.interactive_state["query_actions"])):
+                if self.interactive_state["query"]["type"] == "channel":
+                    channel_id = self.interactive_state["query"]["channel_id"]
+                    guild_id = self.interactive_state["query"]["id"]
+
+                    request = f"{guild_id}::{channel_id}"
+                    request_command = ShellCommand(
+                        name="impersonate-guild",
+                        query=request,
+                        shell=command.core,
+                        channel=command.channel,
+                        message=command.message,
+                        cog="ImpersonateGuild",
+                    )
+
+                    try:
+                        cog = self.db.bot.get_cog(request_command.cog)
+                        await cog.shell_callback(request_command)
+                    except Exception as e:
+                        await command.raw(f"Failed to attach to channel: {e}")
+                        return
+                    else:
+                        await command.raw("Created thread successfully")
+                        return
+
+                elif self.interactive_state["query"]["type"] == "member":
+                    member_id = self.interactive_state["query"]["id"]
+                    request = f"<@{member_id}>"
+                    request_command = ShellCommand(
+                        name="impersonate-dm",
+                        query=request,
+                        shell=command.core,
+                        channel=command.channel,
+                        message=command.message,
+                        cog="ImpersonateDM",
+                    )
+
+                    try:
+                        cog = self.db.bot.get_cog(request_command.cog)
+                        await cog.shell_callback(request_command)
+                    except Exception as e:
+                        await command.raw(f"Failed to attach to member: {e}")
+                        return
+                    else:
+                        await command.raw("Created thread successfully")
+                        return
+
+                else:
+                    await command.raw("Invalid type for attach action")
+                    return
+
+            elif action == "query":
+                query = " ".join(command.query.split(" ")[1:])
+
+                await show_query(query)
+                return
+
+            elif (
+                action == "owner" and "owner" in self.interactive_state["query_actions"]
+            ):
+                if self.interactive_state["query"]["type"] == "guild":
+                    guild_id = self.interactive_state["query"]["id"]
+                    guild = self.db.bot.get_guild(guild_id)
+
+                    if not guild:
+                        await command.raw(f"Guild {guild_id} not found")
+                        await return_home()
+                        return
+
+                    await show_query(f"member:{guild.owner_id}")
+
+            elif (
+                action == "channels"
+                and "channels" in self.interactive_state["query_actions"]
+            ):
+                guild_id = self.interactive_state["query"]["id"]
+                await show_query(f"guild:{guild_id}:channels")
+
+            elif (
+                action == "members"
+                and "members" in self.interactive_state["query_actions"]
+            ):
+                guild_id = self.interactive_state["query"]["id"]
+                await show_query(f"guild:{guild_id}:members")
+
+            elif (
+                action == "guild" and "guild" in self.interactive_state["query_actions"]
+            ):
+                id = self.interactive_state["query"]["id"]
+                if self.db.bot.get_guild(id):
+                    await show_query(f"guild:{id}")
+                else:
+                    await command.raw("This operation is not supported by this query")
+                    return
+
+            # Show query
+            if internal or action == "reload":
+                if self.interactive_state["subpage"] == "list":
+                    if self.interactive_state["query"]["type"] == "guild":
+                        guilds = self.db.bot.guilds
+                        index = 1
+                        index_map = {}
+                        send = []
+                        for guild in guilds:
+                            index_map[index] = guild.id
+                            send.append(f"{index}. {guild.name} ({guild.id})")
+                            index += 1
+
+                        await command.raw("## Guilds")
+                        # Send 10 at a time
+                        for i in range(0, len(send), 10):
+                            await command.raw("\n".join(send[i : i + 10]))
+
+                        self.interactive_state["query_list_index_map"] = index_map
+                        # Add actions for guilds
+                        self.interactive_state["query_actions"].append("select")
+
+                    elif self.interactive_state["query"]["type"] == "member":
+                        members = self.db.bot.get_all_members()
+
+                        # Remove duplicates
+                        members = list(set(members))
+
+                        index = 1
+                        index_map = {}
+                        send = []
+
+                        for member in members:
+                            index_map[index] = member.id
+                            send.append(f"{index}. {member.name} ({member.id})")
+                            index += 1
+
+                        await command.raw("## Members")
+                        # Send 10 at a time
+                        for i in range(0, len(send), 10):
+                            await command.raw("\n".join(send[i : i + 10]))
+
+                        self.interactive_state["query_list_index_map"] = index_map
+                        # Add actions for members
+                        self.interactive_state["query_actions"].append("select")
+
+                    elif self.interactive_state["query"]["type"] == "channel":
+                        await command.raw("This action is not supported for channels")
+                        await return_home()
+                        return
+
+                elif self.interactive_state["subpage"] == "view":
+                    if self.interactive_state["query"]["type"] == "guild":
+                        guild_id = self.interactive_state["query"]["id"]
+
+                        guild_obj = self.db.bot.get_guild(guild_id)
+                        if not guild_obj:
+                            await command.raw(f"Guild {guild_id} not found")
+                            await return_home()
+                            return
+
+                        guild_entry = self.get_entry(id=guild_id, type="guild")
+                        await guild_entry.discord_to_db()
+
+                        output = f"## Server: {guild_obj.name}\n"
+                        output += f"**ID**: {guild_obj.id}\n"
+                        output += f"**Owner**: {guild_obj.owner.name} ({guild_obj.owner.id})\n"
+                        output += f"**Members**: {guild_obj.member_count}\n"
+                        output += f"**Channels**: {len(guild_obj.channels)}\n"
+
+                        self.interactive_state["query_actions"].extend(
+                            ["channels", "members", "owner"]
+                        )
+
+                    elif self.interactive_state["query"]["type"] == "channel":
+                        guild_id = self.interactive_state["query"]["id"]
+                        channel_id = self.interactive_state["query"]["channel_id"]
+
+                        guild_obj = self.db.bot.get_guild(guild_id)
+                        if not guild_obj:
+                            await command.raw(f"Guild {guild_id} not found")
+                            await return_home()
+                            return
+
+                        channel_obj = guild_obj.get_channel(channel_id)
+                        if not channel_obj:
+                            await command.raw(
+                                f"Channel {channel_id} not found within guild {guild_obj.name}"
+                            )
+                            await return_home()
+                            return
+
+                        channel_entry = self.get_entry(
+                            id=channel_id, type="channel", parent_id=guild_id
+                        )
+                        await channel_entry.discord_to_db()
+
+                        output = f"## \#{channel_obj.name} - {guild_obj.name}\n"
+                        output += f"**ID**: {channel_obj.id}\n"
+                        output += f"**Guild ID**: {channel_obj.guild.id}\n"
+                        output += f"**Type**: {channel_obj.type}\n"
+                        output += f"**Category**: {channel_obj.category.name if channel_obj.category else 'None'}\n"
+                        output += f"**View**: {channel_obj.mention}\n"
+
+                        self.interactive_state["query_actions"].extend(
+                            ["guild", "attach"]
+                        )
+
+                    elif self.interactive_state["query"]["type"] == "member":
+                        member_id = self.interactive_state["query"]["id"]
+
+                        member_obj = self.db.bot.get_user(member_id)
+                        if not member_obj:
+                            await command.raw(
+                                f"Could not find member {member_id}. Make sure the member is in a guild the bot is in."
+                            )
+                            await return_home()
+                            return
+
+                        member_entry = self.get_entry(id=member_id, type="member")
+                        await member_entry.discord_to_db()
+
+                        output = f"## @{member_obj.name}\n"
+                        output += f"**ID**: {member_obj.id}\n"
+                        output += f"**Discriminator**: {member_obj.discriminator}\n"
+                        output += f"**Profile**: {member_obj.mention}\n"
+                        output += f"**Bot**: {'Yep' if member_obj.bot else 'Nahh'}\n"
+
+                        output += f"**Mutual Guilds**:\n"
+                        for guild in member_obj.mutual_guilds:
+                            output += f" - {guild.name} ({guild.id})\n"
+
+                        self.interactive_state["query_actions"].extend(["dm"])
+
+                    else:
+                        await command.raw("Invalid type for view query")
+                        return
+
+                    await command.raw(output)
+
+                elif self.interactive_state["subpage"] == "list_channels":
+                    guild_id = self.interactive_state["query"]["id"]
+                    guild_obj = self.db.bot.get_guild(guild_id)
+
+                    channels = guild_obj.channels
+
+                    if not guild_obj:
+                        await command.raw(f"Guild {guild_id} not found")
+                        await return_home()
+                        return
+
+                    index = 1
+                    index_map = {}
+                    send = []
+                    for channel in channels:
+                        index_map[index] = channel.id
+                        send.append(f"{index}. {channel.name} ({channel.id})")
+                        index += 1
+
+                    await command.raw(f"## Channels in {guild_obj.name}")
+                    # Send 10 at a time
+                    for i in range(0, len(send), 10):
+                        await command.raw("\n".join(send[i : i + 10]))
+
+                    self.interactive_state["query_list_index_map"] = index_map
+                    # Add actions for guilds
+                    self.interactive_state["query_actions"].extend(["select", "guild"])
+
+                elif self.interactive_state["subpage"] == "list_members":
+                    guild_id = self.interactive_state["query"]["id"]
+                    guild_obj = self.db.bot.get_guild(guild_id)
+
+                    members = guild_obj.members
+
+                    if not guild_obj:
+                        await command.raw(f"Guild {guild_id} not found")
+                        await return_home()
+                        return
+
+                    index = 1
+                    index_map = {}
+                    send = []
+                    for member in members:
+                        index_map[index] = member.id
+                        send.append(f"{index}. {member.name} ({member.id})")
+                        index += 1
+
+                    await command.raw(f"## Members in {guild_obj.name}")
+                    # Send 10 at a time
+                    for i in range(0, len(send), 10):
+                        await command.raw("\n".join(send[i : i + 10]))
+
+                    self.interactive_state["query_list_index_map"] = index_map
+                    # Add actions for guilds
+                    self.interactive_state["query_actions"].extend(["select", "guild"])
+
+            else:
+                await command.raw("Please choose an action")
+                return
+
+            actions_str = "### Actions\n"
+            actions_desc = {
+                "return": "`return` - Return to the main page",
+                "back": "`back` - Go back to the previous query",
+                "select": "`select <index|id>` - Select an item from the list",
+                "reload": "`reload` - Show content again",
+                "channels": "`channels` - List all channels",
+                "members": "`members` - List all members",
+                "guilds": "`guilds` - List all guilds the member is in",
+                "guild": "`guild` - View the referenced guild",
+                "attach": "`attach` - Attach a thread to the channel (ImpersonateGuild)",
+                "dm": "`dm` - Direct message a member (ImpersonateDM)",
+                "owner": "`owner` - View the owner of the guild",
+                "query": "`query <query>` - Discard current query and enter a new one",
+            }
+            for action in self.interactive_state["query_actions"]:
+                actions_str += (
+                    f"{actions_desc[action] if action in actions_desc else action}\n"
+                )
+
+            actions_str += "Choose an action:"
+            await command.raw(actions_str)
+            return
+        elif self.interactive_state["page"] == "history":
+            if command.query:
+                if command.query.lower() == "return":
+                    await return_home()
+                    return
+
+            if (
+                not self.interactive_state["history"]
+                or len(self.interactive_state["history"]) == 0
+            ):
+                await command.raw("No history available")
+                await return_home()
+                return
+            
+            try:
+                command.query  = int(command.query)
+            except:
+                pass
+                
+
+            if isinstance(command.query, int):
+                index = int(command.query)
+
+                query = self.interactive_state["history"][index - 1]
+                if not query:
+                    await command.raw("Invalid index")
+                    return
+
+                await show_query(query)
+                return
+
+            await command.raw("## History")
+
+            # Create 10-line groups
+            history = self.interactive_state["history"]
+            history_strings = []
+            
+            for item in history:
+                history_strings.append(f"{len(history_strings) + 1}. {item}")
+            
+            for i in range(0, len(history_strings), 10):
+                await command.raw(
+                    "\n".join(history_strings[i : i + 10])
+                )
+
+            await command.raw("Enter a number to view the query or `return` to go back")
+            return
+
 
 class DatabaseHandler(commands.Cog):
     """Cog for intergrating the database with the bot"""
@@ -1082,6 +1774,11 @@ class DatabaseHandler(commands.Cog):
             command="db",
             cog="DatabaseHandler",
             description="Database commands",
+        )
+        self.shell.add_command(
+            command="explorer",
+            cog="DatabaseHandler",
+            description="Interactive Discord data explorer",
         )
 
         print("[Core.Database] Database enabled")
@@ -1240,7 +1937,20 @@ class DatabaseHandler(commands.Cog):
             return "Database connection failed"
 
     async def shell_callback(self, command: ShellCommand):
-        if command.name == "db":
+        if command.name == "explorer":
+            await command.log(
+                "Launching interactive Discord data explorer...",
+                title="Discord Data Exploration",
+                msg_type="info",
+            )
+            self.core.shell.interactive_mode = (
+                "DatabaseHandler",
+                "discord-explore",
+            )
+            await self.core.discord.interactive(command, init=True)
+            return
+
+        elif command.name == "db":
             subcommand = (
                 command.query.split(" ")[0] if " " in command.query else command.query
             )
@@ -1281,14 +1991,14 @@ class DatabaseHandler(commands.Cog):
                     if " " in command.query
                     else command.query
                 )
-                
+
                 if subsubcommand == "index-all":
                     message = await command.log(
                         "Indexing all Discord data...\nThis may take a while.",
                         title="Discord Data Indexing",
                         msg_type="info",
                     )
-                    
+
                     result, log = await self.core.discord.index_all()
                     print(result, log)
                     fields = [
@@ -1315,10 +2025,26 @@ class DatabaseHandler(commands.Cog):
                             edit=message,
                         )
                     return
+                elif subsubcommand == "explore":
+                    await command.log(
+                        "Launching interactive Discord data explorer...",
+                        title="Discord Data Exploration",
+                        msg_type="info",
+                    )
+                    self.core.shell.interactive_mode = (
+                        "DatabaseHandler",
+                        "discord-explore",
+                    )
+                    await self.core.discord.interactive(command, init=True)
+                    return
                 fields = [
                     {
                         "name": "db discord index-all",
                         "value": "Index all Discord data",
+                    },
+                    {
+                        "name": "db discord explore",
+                        "value": "Explore Discord data (Interactive)",
                     },
                 ]
                 await command.log(
@@ -1351,6 +2077,10 @@ class DatabaseHandler(commands.Cog):
                     title="Database Commands",
                     msg_type="info",
                 )
+
+        elif command.name == "discord-explore":
+            await self.core.discord.interactive(command)
+            return
 
         else:
             await command.log(
