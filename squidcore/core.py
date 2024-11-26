@@ -16,6 +16,11 @@ from .db import *  # Database
 from .status import RandomStatus, Status  # Random Status
 from .files import *  # File management
 from .impersonate import *  # Impersonation (Talking as the bot and dm handling)
+from .explorer import *  # Discord Explorer
+
+# Logs
+import logging
+from .log_setup import logger
 
 # * Core
 class Bot(commands.Bot):
@@ -61,13 +66,12 @@ class Bot(commands.Bot):
             case_insensitive=True,
             help_command=None,
         )
-
         # Load cogs
-        print("[Core] Loading built-in cogs")
+        logger.info("Loading built-in cogs")
         asyncio.run(self._load_cogs())
-        print("[Core] Cogs loaded")
+        logger.info("Cogs loaded")
 
-        print(f"[Core] {self.name.title()} bot initialized")
+        logger.info(f"{self.name.title()} bot initialized")
 
     def add_db(
         self,
@@ -108,7 +112,7 @@ class Bot(commands.Bot):
                 )
             )
         except Exception as e:
-            print(f"[Core] Failed to add database handler: {e}")
+            logger.error(f"Failed to add database handler: {e}")
             
     def set_status(self, random_status: list[Status] = None, static_status: Status = None):
         
@@ -122,27 +126,27 @@ class Bot(commands.Bot):
 
     def run(self):
         """Start the bot"""
-        print(f"[Core] Running bot {self.name}")
+        logger.info(f"Running bot {self.name}")
         super().run(token=self.token)
 
     async def on_ready(self):
         """On ready message"""
-        print(f"[Core] {self.user} is ready")
+        logger.info(f"{self.user} is ready")
             
         # Sync application 
         if self.sync_commands:
-            print("[Core] Syncing application commands")
+            logger.info("Syncing application commands")
             await self.tree.sync()
-            print("[Core] Application commands synced")
+            logger.info("Application commands synced")
         else:
-            print("[Core] Skipping application command sync")
+            logger.warning("Skipping application command sync")
 
         
         # Set static status if provided
         if hasattr(self, "static_status"):
             await self.change_presence(activity=self.static_status())
         else:
-            print("[Core] No static status provided")
+            logger.info("No static status provided")
             
     async def add_cog(self, cog, *args, **kwargs):
         """Adds a cog to the bot"""
@@ -163,6 +167,7 @@ class Bot(commands.Bot):
         await self.add_cog(ShellHandler(self, self.shell))
         await self.add_cog(ImpersonateGuild(self, self.shell))
         await self.add_cog(ImpersonateDM(self, self.shell))
+        await self.add_cog(DiscordExplorer(self))
     
     def dont_sync_commands(self):
         """Don't sync application commands"""

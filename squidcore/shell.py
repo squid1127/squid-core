@@ -2,6 +2,8 @@ import asyncio
 import discord
 from discord.ext import commands
 
+import logging
+logger = logging.getLogger('core.shell')
 
 class ShellCore:
     """
@@ -31,11 +33,11 @@ class ShellCore:
         try:
             self.channel = self.bot.get_channel(self.channel_id)
             if not self.channel:
-                print(f"[Core.Shell] Shell channel {self.channel_id} not found!")
+                logger.critical(f"Shell channel {self.channel_id} not found!")
                 return
         
-            print("[Core.Shell] Shell channel found!")
-            print("[Core.Shell] Starting logging...")
+            logger.info("Shell channel found!")
+            logger.info("Starting logging...")
             await asyncio.sleep(1)
             await self.log(
                 f"{self.name.title()} has successfully started.",
@@ -44,11 +46,11 @@ class ShellCore:
                 cog="Shell",
             )
         except AttributeError:
-            print(f"[Core.Shell] Shell channel {self.channel_id} not found! Attribute error.")
+            logger.critical(f"Shell channel {self.channel_id} not found! Attribute error.")
             return
         
         except Exception as e:
-            print(f"[Core.Shell] Error starting shell: {e}")
+            logger.critical(f"Error starting shell: {e}")
             return
 
     def add_command(
@@ -344,12 +346,14 @@ class ShellHandler(commands.Cog):
         self.core.add_command("help", "ShellHandler", "Show this help message")
         self.core.add_command("cog", "ShellHandler", "Manage cogs")
         self.core.add_command("die", "ShellHandler", "Kill the bot")
+        
+        self.logger = logging.getLogger('core.shell.handler')
 
     @commands.Cog.listener()
     async def on_ready(self):
         """Start the shell"""
         await self.core.start()
-        print("[Core.ShellHandler] Shell started!")
+        self.logger.info("Shell started!")
 
     # Shell command Listener
     @commands.Cog.listener()
@@ -371,12 +375,12 @@ class ShellHandler(commands.Cog):
         try:
             self.core.channel
         except AttributeError:
-            print("[Core.ShellHandler] Shell channel not found!")
+            self.logger.error("Shell channel not found!")
             return
 
         # Interactive mode
         if self.core.interactive_mode[0] is not None:
-            print("[Core.ShellHandler] Interactive mode is on")
+            self.logger.info(f"Facilitating interactive mode for {self.core.interactive_mode[0]}")
             cog = self.core.interactive_mode[0]
             callback = self.core.interactive_mode[1]
 
@@ -471,7 +475,7 @@ class ShellHandler(commands.Cog):
     async def shell_callback(self, command: ShellCommand):
         """Shell command callback"""
         if command.name == "status":
-            print("[Core.ShellHandler] Status command called")
+            self.logger.info("Status command called")
             # Run cog_check on all cogs
             edit = await command.log(
                 f"{self.bot.user.name.title()} is currently online and operational.\n\nChecking cogs...",
@@ -480,16 +484,14 @@ class ShellHandler(commands.Cog):
             )
             fields = []
             for cog in self.bot.cogs:
-                print(f"[Core.ShellHandler] Checking cog {cog}")
+                self.logger.info(f"Checking cog {cog}")
                 try:
                     check = await self.bot.cogs[cog].cog_status()
                     fields.append({"name": cog, "value": check})
-                    print(f"[Core.ShellHandler] Cog {cog} is {check}")
+                    self.logger.info(f"Cog {cog} is {check}")
                 except AttributeError:
                     fields.append({"name": cog, "value": "Status unknown"})
-                    print(
-                        f"[Core.ShellHandler] Cog {cog} status unknown (no cog_status method)"
-                    )
+                    self.logger.warning(f"Cog {cog} status unknown")
 
             await command.log(
                 f"{self.bot.user.name.title()} is currently online and operational. {len(fields)} cogs loaded.{' Running as Docker container' if self.bot.is_docker() else ''}",
@@ -644,7 +646,7 @@ class ShellHandler(commands.Cog):
                     title="Bot Shutdown",
                     msg_type="info",
                 )
-                print("[Core.ShellHandler] -> [Command.Die] Shutting down...")
+                self.logger.warning("Command.die - Shutting down bot")
                 await self.bot.close()
                 return
             await command.log(
