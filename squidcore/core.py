@@ -48,6 +48,8 @@ class Bot(commands.Bot):
         self.has_db = False
         self.db = None
         
+        self.sync_commands = True
+        
         self.cog_cache = {}
 
         # Shell
@@ -127,10 +129,13 @@ class Bot(commands.Bot):
         """On ready message"""
         print(f"[Core] {self.user} is ready")
             
-        # Sync application commands
-        print("[Core] Syncing application commands")
-        await self.tree.sync()
-        print("[Core] Application commands synced")
+        # Sync application 
+        if self.sync_commands:
+            print("[Core] Syncing application commands")
+            await self.tree.sync()
+            print("[Core] Application commands synced")
+        else:
+            print("[Core] Skipping application command sync")
 
         
         # Set static status if provided
@@ -158,6 +163,10 @@ class Bot(commands.Bot):
         await self.add_cog(ShellHandler(self, self.shell))
         await self.add_cog(ImpersonateGuild(self, self.shell))
         await self.add_cog(ImpersonateDM(self, self.shell))
+    
+    def dont_sync_commands(self):
+        """Don't sync application commands"""
+        self.sync_commands = False
 
     def is_docker(self):
         """Check if the bot is running in a Docker container"""
