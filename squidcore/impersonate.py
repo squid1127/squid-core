@@ -18,6 +18,8 @@ class ImpersonateCore:
     async def active_threads(self, guildMode: bool = False, forceUpdate: bool = False):
         """Get all active threads in the shell channel."""
         # print("[Impersonate] Getting active threads."
+        
+
 
         if guildMode:
             if (
@@ -56,6 +58,11 @@ class ImpersonateCore:
         print(f"[Impersonate] Updating active { 'guild' if guildMode else 'DM' } threads.")
 
         shell = self.shell.get_channel()
+        
+        if shell is None:
+            print("[Impersonate] Failed to fetch threads: Shell channel not found.")
+            return
+        
         threads: list[discord.Thread] = shell.threads
 
         threads = [
@@ -443,6 +450,10 @@ class ImpersonateGuild(commands.Cog):
 
         if message.guild is None:
             return
+        
+        if self.bot.is_ready() is False:
+            print("[ImpersonateGuild] Failed to process message: Bot is not ready.")
+            return
 
         threads, thread_names = await self.core.active_threads(guildMode=True)
 
@@ -641,6 +652,10 @@ class ImpersonateDM(commands.Cog):
     @commands.Cog.listener()
     async def on_message(self, message: discord.Message):
         if message.author == self.bot.user:
+            return
+        
+        if self.bot.is_ready() is False:
+            print("[ImpersonateDM] Could not process message: Bot is not ready.")
             return
 
         threads, thread_names = await self.core.active_threads(guildMode=False)
