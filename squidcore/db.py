@@ -24,6 +24,10 @@ import random
 # Dict output
 import json
 
+# Logging
+import logging
+
+logger = logging.getLogger("core.db")
 
 class DatabaseItem:
     """Represents an item in a database table, useful for fetching and modifying data"""
@@ -37,14 +41,14 @@ class DatabaseItem:
     async def update(self, data: dict):
         """Update the item"""
         if not await self.check_exsists():
-            print("[Core.Database] Item does not exist -- Creating new item")
+            logger.info("Item does not exist -- Creating new item")
             await self.table.insert(data)
-            print("[Core.Database] Item created")
+            logger.info("Item created")
             return await self.fetch_data()
 
-        print("[Core.Database] Item exists -- Updating item")
+        logger.info("Item exists -- Updating item")
         await self.table.update(data, {self.refrence_key: self.refrence_value})
-        print("[Core.Database] Item updated")
+        logger.info("Item updated")
         return await self.fetch_data()
 
     async def delete(self):
@@ -59,8 +63,8 @@ class DatabaseItem:
 
     async def fetch_data(self):
         """Fetch the data for the item"""
-        print(
-            f"[Core.Database] Fetching data for {self.table} -> {self.refrence_key} -> {self.refrence_value}"
+        logger.info(
+            f"Fetching data for {self.table} -> {self.refrence_key} -> {self.refrence_value}"
         )
         result = await self.table.fetch({self.refrence_key: self.refrence_value})
 
@@ -189,12 +193,13 @@ class DatabaseTable:
 
     async def index_all(self):
         """Subcommand of index all"""
-        print(f"[Core.Database] Indexing -> {self.schema} -> {self.name}")
+        logger.debug(f"Indexing -> {self.schema} -> {self.name}")
         await self.get_columns()
         for column in self.columns:
-            print(
-                f"[Core.Database] Indexing -> {self.schema} -> {self.name} -> {column.get('column_name')}"
-            )
+                logger.debug(
+                    f"Indexing -> {self.schema} -> {self.name} -> {column.get('column_name')}"
+                )
+            
 
         return self
 
@@ -263,36 +268,36 @@ class DatabaseTableV1:
             The data for the database schema and name, either fetched or cached.
         """
 
-        print(
-            f"[Core.Database] Data requested for {self.schema} -> {self.name} ({self.random})"
+        logger.info(
+            f"Data requested for {self.schema} -> {self.name} ({self.random})"
         )
-        print(f"[Core.Database] Last fetch: {self.last_fetch}")
+        logger.info(f"Last fetch: {self.last_fetch}")
         if self.last_fetch == None or self.do_periodic_fetch == False:
-            print(f"[Core.Database] Fetching all data for {self.schema} -> {self.name}")
+            logger.info(f"Fetching all data for {self.schema} -> {self.name}")
             return await self.fetch_all()
 
         # Check if the data is stale
         if time.time() - self.last_fetch > self.fetch_interval * 60:
-            print(f"[Core.Database] Data stale for {self.schema} -> {self.name}")
+            logger.info(f"Data stale for {self.schema} -> {self.name}")
             return await self.fetch_all()
 
-        print(f"[Core.Database] Using cached data for {self.schema} -> {self.name}")
+        logger.info(f"Using cached data for {self.schema} -> {self.name}")
         return self._cache_all
 
     async def fetch_all(self):
         """Retrieve all data from the database"""
         result = await self.schema.db.core.query(f"SELECT * FROM {self.schema}.{self}")
 
-        print(
-            f"[Core.Database] Data fetched, converting for {self.schema} -> {self.name} ({self.random})"
+        logger.info(
+            f"Data fetched, converting for {self.schema} -> {self.name} ({self.random})"
         )
 
         self._cache_all = self.schema.db.core.table_to_list_dict(result)
         self.data = self._cache_all  # Data variable for some reason
 
         self.last_fetch = time.time()
-        print(
-            f"[Core.Database] Data fetched for {self.schema} -> {self.name} ({self.random})"
+        logger.info(
+            f"Data fetched for {self.schema} -> {self.name} ({self.random})"
         )
 
         return self._cache_all
@@ -312,12 +317,12 @@ class DatabaseTableV1:
 
     async def index_all(self):
         """Get all columns"""
-        print(f"[Core.Database] Indexing -> {self.schema} -> {self.name}")
+        logger.debug(f"Indexing -> {self.schema} -> {self.name}")
         await self.get_columns()
         for column in self.columns:
-            print(
-                f"[Core.Database] Indexing -> {self.schema} -> {self.name} -> {column.get('column_name')}"
-            )
+                logger.debug(
+                    f"Indexing -> {self.schema} -> {self.name} -> {column.get('column_name')}"
+                )
         return self
 
     async def insert(self, data: dict):
@@ -326,10 +331,6 @@ class DatabaseTableV1:
         placeholders = ", ".join(["${}".format(i + 1) for i in range(len(data))])
         columns = ", ".join(data.keys())
         values = list(data.values())
-
-        print(
-            f"[Core.Database] Executing query: INSERT INTO {self.schema}.{self.name} ({columns}) VALUES ({placeholders})"
-        )
         # Execute query
         await self.schema.db.core.execute(
             f"INSERT INTO {self.schema}.{self.name} ({columns}) VALUES ({placeholders})",
@@ -357,17 +358,17 @@ class DatabaseTableV1:
             # Check if the data is in the cache
             if filter_string in self._cache_filter:
                 if time.time() - self._cache_filter[filter_string]["time"] < 60:
-                    print(
-                        f"[Core.Database] Using cached data for {self.schema} -> {self.name} ({self.random}) -> {filter_string}"
+                    logger.info(
+                        f"Using cached data for {self.schema} -> {self.name} ({self.random}) -> {filter_string}"
                     )
                     return self._cache_filter[filter_string]["result"]
 
-                print(
-                    f"[Core.Database] Data stale for {self.schema} -> {self.name} ({self.random}) -> {filter_string}"
+                logger.info(
+                    f"Data stale for {self.schema} -> {self.name} ({self.random}) -> {filter_string}"
                 )
 
-        print(
-            f"[Core.Database] Fetching data for {self.schema} -> {self.name} ({self.random}) -> {filter_string}"
+        logger.info(
+            f"Fetching data for {self.schema} -> {self.name} ({self.random}) -> {filter_string}"
         )
 
         # Execute query
@@ -456,7 +457,7 @@ class DatabaseSchema:
 
     async def index_all(self):
         """Get all tables"""
-        print(f"[Core.Database] Indexing -> {self.name}")
+        logger.debug(f"Indexing -> {self.name}")
         await self.get_all_tables()
         for table in self.tables:
             await self.tables[table].index_all()
@@ -517,12 +518,12 @@ class DatabaseObject:
 
     async def index_all(self):
         """Get all schemas and tables"""
-        print("[Core.Database] Indexing")
+        logger.info("Indexing")
         await self.get_all_schemas()
         for schema in self.schemas:
             await self.schemas[schema].index_all()
 
-        print("[Core.Database] Indexing complete")
+        logger.info("Indexing complete")
 
     def _add_schema(self, name: str):
         """Add a schema to the database"""
@@ -532,7 +533,16 @@ class DatabaseObject:
 
 
 class DatabaseCore:
-    """Core database class for managing the database connection and data"""
+    """
+    Core database handler for the bot, including database connection and data management.
+    
+    Args:
+        bot (Bot): The bot object.
+        shell (ShellCore): The shell object.
+        postgres_connection (str): The connection string for the PostgreSQL database.
+        postgres_password (str, optional): The password for the PostgreSQL database. (Optional if specified in the connection string)
+        postgres_pool (int, optional): The maximum number of connections to the PostgreSQL database. Defaults to 20.
+    """
 
     def __init__(
         self,
@@ -550,7 +560,7 @@ class DatabaseCore:
         self.pool = None
         self.working = False
         self.indexed = False
-
+        
         ignore = [
             "pg_toast",
             "pg_catalog",
@@ -562,6 +572,9 @@ class DatabaseCore:
 
         self.data = DatabaseObject(self, ignore_schema=ignore)
         self.discord = DiscordData(self)
+    
+
+        
 
     async def start(self) -> bool:
         """
@@ -579,25 +592,25 @@ class DatabaseCore:
             try:
                 await self.create_pool()
             except asyncpg.exceptions.InvalidPasswordError:
-                print("[Core.Database] Invalid password")
+                logger.error("Invalid password")
                 reason_failed = "Invalid password"
             except asyncpg.exceptions.InvalidCatalogNameError:
-                print("[Core.Database] Invalid catalog name")
+                logger.error("Invalid catalog name")
                 reason_failed = "Invalid catalog name"
             except asyncpg.exceptions.ConnectionRejectionError:
-                print("[Core.Database] Connection rejected")
+                logger.error("Connection rejected")
                 reason_failed = "Connection rejected"
             except Exception as e:
-                print(f"[Core.Database] Failed to connect to database: {e}")
+                logger.error(f"Failed to connect to database: {e}")
                 reason_failed = e
             else:
-                print("[Core.Database] Database connection pool created")
+                logger.info("Database connection pool created")
 
                 # If the connection pool is created, check the status of the database
                 try:
                     status = await self.check_status()
                     if status == 2:
-                        print("[Core.Database] Database connection successful")
+                        logger.info("Database connection successful")
                         try:
                             post_start = await self.post_start()
                         except Exception as e:
@@ -612,14 +625,14 @@ class DatabaseCore:
                                 )
 
                     elif status == 1:
-                        print("[Core.Database] Database connected but no tables found")
+                        logger.warning("Database connected but no tables found")
                         self.working = True
                         return True
                     else:
-                        print("[Core.Database] Database connection failed")
+                        logger.error("Database connection failed")
                         reason_failed = "Status check failed"
                 except Exception as e:
-                    print(f"[Core.Database] Failed to check database status: {e}")
+                    logger.error(f"Failed to check database status: {e}")
                     reason_failed = e
 
             # If the connection fails, retry after a 10-second delay
@@ -629,17 +642,17 @@ class DatabaseCore:
                 msg_type="error",
                 cog="DatabaseHandler",
             )
-            print(
-                "[Core.Database] Failed to connect to database, retrying in 10 seconds"
+            logger.error(
+                "Failed to connect to database, retrying in 10 seconds"
             )
             await asyncio.sleep(10)
 
     async def post_start(self):
         """Post-startup tasks"""
         # Check if the database is ready
-        print("[Core.Database] Processing post-startup tasks")
+        logger.info("Processing post-startup tasks")
         await self.discord.setup(trycatch=False)
-        print("[Core.Database] Post-startup tasks complete")
+        logger.info("Post-startup tasks complete")
         return True
 
     # * Database Queries & Functions
@@ -850,7 +863,7 @@ class DiscordEntry(DatabaseItem):
             # Convert to JSON
             data["guilds"] = json.dumps(guild_list)
 
-        print(f"[Core.Database.ServerData] Syncing {self.type} {self.id} -> {data}")
+        logger.info(f"Syncing {self.type} {self.id} -> {data}")
         await self.push_db(data)
 
 
@@ -904,13 +917,13 @@ class DiscordData:
     """
 
     async def setup(self, trycatch: bool = True):
-        print("[Core.Database.ServerData] Setting up server data tables")
+        logger.info("Setting up server data tables")
         if trycatch:
             try:
                 await self.db.execute(self.POSTGRES)
             except Exception as e:
-                print(
-                    f"[Core.Database.ServerData] Error setting up server data tables: {e}"
+                logger.error(
+                    f"Error setting up server data tables: {e}"
                 )
                 return e
             return True
@@ -927,7 +940,7 @@ class DiscordData:
     ):
         """Get a Discord entry by ID or object"""
         if obj:
-            # print(f"[Core.Database.ServerData] Debug -> Object class: {obj.__class__}")
+            # logger.info(f"Debug -> Object class: {obj.__class__}")
             if isinstance(obj, discord.Guild):
                 return DiscordEntry(
                     db=self.db,
@@ -1008,11 +1021,11 @@ class DiscordData:
 
         try:
 
-            print("[Core.Database.ServerData] Indexing all Discord data")
+            logger.info("Indexing all Discord data")
             log.append("Indexing all Discord data")
             log.append("~" * 10)
 
-            print("[Core.Database.ServerData] Indexing guilds")
+            logger.info("Indexing guilds")
             log.append("Indexing guilds")
             guilds = self.db.bot.guilds
 
@@ -1021,16 +1034,16 @@ class DiscordData:
                     try:
                         await self.register(guild=guild)
                     except Exception as e:
-                        print(f"[Core.Database.ServerData] Error indexing guild: {e}")
+                        logger.error(f"Error indexing guild: {e}")
                         log.append(f"[ERROR] Error indexing guild {guild.name}: {e}")
 
             except Exception as e:
-                print(f"[Core.Database.ServerData] Error indexing guilds: {e}")
+                logger.error(f"Error indexing guilds: {e}")
                 log.append("~" * 10)
                 log.append(f"[FATAL] Error indexing guilds: {e}")
                 return (False, log)
 
-            print("[Core.Database.ServerData] Indexing channels")
+            logger.info("Indexing channels")
             log.append("Indexing channels")
             channels = self.db.bot.get_all_channels()
 
@@ -1039,18 +1052,18 @@ class DiscordData:
                     try:
                         await self.register(channel=channel)
                     except Exception as e:
-                        print(f"[Core.Database.ServerData] Error indexing channel: {e}")
+                        logger.error(f"Error indexing channel: {e}")
                         log.append(
                             f"[ERROR] Error indexing channel {guild.name} -> {channel.name}: {e}"
                         )
 
             except Exception as e:
-                print(f"[Core.Database.ServerData] Error indexing channels: {e}")
+                logger.error(f"Error indexing channels: {e}")
                 log.append("~" * 10)
                 log.append(f"[FATAL] Error indexing channels: {e}")
                 return (False, log)
 
-            print("[Core.Database.ServerData] Indexing members")
+            logger.info("Indexing members")
             log.append("Indexing members")
             members = self.db.bot.get_all_members()
 
@@ -1059,24 +1072,24 @@ class DiscordData:
                     try:
                         await self.register(user=member)
                     except Exception as e:
-                        print(f"[Core.Database.ServerData] Error indexing member: {e}")
+                        logger.error(f"Error indexing member: {e}")
                         log.append(f"[ERROR] Error indexing member {member.name}: {e}")
 
             except Exception as e:
-                print(f"[Core.Database.ServerData] Error indexing members: {e}")
+                logger.error(f"Error indexing members: {e}")
                 log.append("~" * 10)
 
                 log.append(f"[FATAL] Error indexing members: {e}")
                 return (False, log)
 
-            print("[Core.Database.ServerData] Indexing complete")
+            logger.info("Indexing complete")
             log.append("~" * 10)
             log.append("Indexing completed successfully")
 
             return (True, log)
 
         except Exception as e:
-            print(f"[Core.Database.ServerData] Error indexing Discord data: {e}")
+            logger.error(f"Uncaught Error indexing Discord data: {e}")
             log.append("~" * 10)
 
             log.append(f"[FATAL] Uncaught error: {e}")
@@ -1200,8 +1213,8 @@ class DiscordData:
         if internal:
             command.query = None
 
-        print(
-            f"[Core.Database.ServerData] Discord Data Explorer - Processing query: {command.query}"
+        logger.info(
+            f"Discord Data Explorer - Processing query: {command.query}"
         )
 
         if self.interactive_state.get("debug", False):
@@ -1272,8 +1285,8 @@ class DiscordData:
                 with open(json_file, "w") as f:
                     json.dump(json_debug, f, indent=4)
             except Exception as e:
-                print(
-                    f"[Core.Database.ServerData] Discord Data Explorer - Debug: Failed to write debug file: {e}"
+                logger.error(
+                    f"Discord Data Explorer - Debug: Failed to write debug file: {e}"
                 )
 
         if self.interactive_state["page"] == "main":
@@ -1781,12 +1794,12 @@ class DatabaseHandler(commands.Cog):
             description="Interactive Discord data explorer",
         )
 
-        print("[Core.Database] Database enabled")
+        logger.info("Database enabled")
 
     # Start database connection
     @commands.Cog.listener()
     async def on_ready(self):
-        print("[Core.Database] Connecting to database")
+        logger.info("Connecting to database")
 
         success = await self.core.start()
         if success != True:
@@ -1807,13 +1820,13 @@ class DatabaseHandler(commands.Cog):
                 )
                 return
 
-        print("[Core.Database] Database connected; starting indexing task")
+        logger.info("Database connected; starting indexing task")
         self.periodic_index.start()
-        print("[Core.Database] Database indexing task started")
+        logger.info("Database indexing task started")
 
     @tasks.loop(hours=1)
     async def periodic_index(self):
-        print("[Core.Database] Periodic indexing")
+        logger.info("Periodic indexing")
         await self.core.data.index_all()
         self.core.indexed = True
 
@@ -1827,7 +1840,7 @@ class DatabaseHandler(commands.Cog):
         try:
             await self.core.discord.register(guild=guild)
         except Exception as e:
-            print(f"[Core.Database] Error when registering guild: {e}")
+            logger.error(f"Error when registering guild: {e}")
             await self.shell.log(
                 f"Error registering Discord data: {e}",
                 title="Database Error (Discord Data)",
@@ -1844,7 +1857,7 @@ class DatabaseHandler(commands.Cog):
         try:
             await self.core.discord.register(channel=channel)
         except Exception as e:
-            print(f"[Core.Database] Error when registering channel: {e}")
+            logger.error(f"Error when registering channel: {e}")
             await self.shell.log(
                 f"Error registering Discord data: {e}",
                 title="Database Error (Discord Data)",
@@ -1861,7 +1874,7 @@ class DatabaseHandler(commands.Cog):
         try:
             await self.core.discord.register(guild=after)
         except Exception as e:
-            print(f"[Core.Database] Error when registering guild: {e}")
+            logger.error(f"Error when registering guild: {e}")
             await self.shell.log(
                 f"Error registering Discord data: {e}",
                 title="Database Error (Discord Data)",
@@ -1878,7 +1891,7 @@ class DatabaseHandler(commands.Cog):
         try:
             await self.core.discord.register(channel=channel)
         except Exception as e:
-            print(f"[Core.Database] Error when registering channel: {e}")
+            logger.error(f"Error when registering channel: {e}")
             await self.shell.log(
                 f"Error registering Discord data: {e}",
                 title="Database Error (Discord Data)",
@@ -1897,7 +1910,7 @@ class DatabaseHandler(commands.Cog):
         try:
             await self.core.discord.register(channel=after)
         except Exception as e:
-            print(f"[Core.Database] Error when registering channel: {e}")
+            logger.error(f"Error when registering channel: {e}")
             await self.shell.log(
                 f"Error registering Discord data: {e}",
                 title="Database Error (Discord Data)",
@@ -1914,7 +1927,7 @@ class DatabaseHandler(commands.Cog):
         try:
             await self.core.discord.register(user=member)
         except Exception as e:
-            print(f"[Core.Database] Error when registering member: {e}")
+            logger.error(f"Error when registering member: {e}")
             await self.shell.log(
                 f"Error registering Discord data: {e}",
                 title="Database Error (Discord Data)",
@@ -1925,7 +1938,7 @@ class DatabaseHandler(commands.Cog):
     # Cog Status
     async def cog_status(self) -> str:
         """Check the status of the database connection by checking the schema"""
-        print("[Core.Database] Checking database status")
+        logger.info("Checking database status")
 
         # Connection status (Check schema)
         status = await self.core.check_status()
@@ -2000,14 +2013,13 @@ class DatabaseHandler(commands.Cog):
                     )
 
                     result, log = await self.core.discord.index_all()
-                    print(result, log)
+                    logger.info(result, log)
                     fields = [
                         {
                             "name": "Log",
                             "value": "```" + "\n".join(log) + "```",
                         },
                     ]
-                    print("sigma")
                     if result:
                         await command.log(
                             "Successfully indexed all Discord data.",
