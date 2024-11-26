@@ -9,73 +9,83 @@ import time
 
 import datetime, timedelta
 
+import logging
+
+logger = logging.getLogger("core.impersonate")
+
 
 class ImpersonateCore:
     def __init__(self, bot: commands.Bot, shell: ShellCore):
         self.bot = bot
         self.shell = shell
 
+        self.active_threads_dm = None
+        self.active_threads_dm_time = 0
+        self.active_threads_guild = None
+        self.active_threads_guild_time = 0
+
     async def active_threads(self, guildMode: bool = False, forceUpdate: bool = False):
         """Get all active threads in the shell channel."""
-        # print("[Impersonate] Getting active threads."
-        
 
+        logger.debug(f"Request for active {'guild' if guildMode else 'DM'} threads.")
 
-        if guildMode:
-            if (
-                hasattr(self, "active_threads_guild")
-                and hasattr(self, "active_threads_guild_time")
-                and not forceUpdate
-            ):
-                # print(f"[Impersonate] Cached threads found. | Cached time: {self.active_threads_guild_time} | Current time: {time.time()} | Time difference: {time.time() - self.active_threads_guild_time}")
-                if (
-                    time.time() - self.active_threads_guild_time < 1800
-                ):
-                    # print("[Impersonate] Returning cached threads.")
-                    return self.active_threads_guild
-                else:
-                    print("[Impersonate] Cached threads found, but expired.")
-            else:
-                print("[Impersonate] No cached threads found.")
-                
+        if forceUpdate:
+            logger.info("Forcing update of active threads.")
+
         else:
-            if (
-                hasattr(self, "active_threads_dm")
-                and hasattr(self, "active_threads_dm_time")
-                and not forceUpdate
-            ):
-                # print(f"[Impersonate] Cached threads found. | Cached time: {self.active_threads_dm_time} | Current time: {time.time()} | Time difference: {time.time() - self.active_threads_dm_time}")
-                if (
-                    time.time() - self.active_threads_dm_time < 1800
+            if guildMode:
+                if hasattr(self, "active_threads_guild") and hasattr(
+                    self, "active_threads_guild_time"
                 ):
-                    # print("[Impersonate] Returning cached threads.")
-                    return self.active_threads_dm
+                    # logger.info(f"Cached threads found. | Cached time: {self.active_threads_guild_time} | Current time: {time.time()} | Time difference: {time.time() - self.active_threads_guild_time}")
+                    if time.time() - self.active_threads_guild_time < 1800:
+                        # logger.info("Returning cached threads.")
+                        logger.debug("Using cached guild threads.")
+                        return self.active_threads_guild
+                    else:
+                        logger.warning("Cached threads found, but expired.")
                 else:
-                    print("[Impersonate] Cached threads found, but expired.")
-            else:
-                print("[Impersonate] No cached threads found.")
+                    logger.warning("No cached threads found.")
 
-        print(f"[Impersonate] Updating active { 'guild' if guildMode else 'DM' } threads.")
+            else:
+                if hasattr(self, "active_threads_dm") and hasattr(
+                    self, "active_threads_dm_time"
+                ):
+                    # logger.info(f"Cached threads found. | Cached time: {self.active_threads_dm_time} | Current time: {time.time()} | Time difference: {time.time() - self.active_threads_dm_time}")
+                    if time.time() - self.active_threads_dm_time < 1800:
+                        # logger.info("Returning cached threads.")
+                        logger.debug("Using cached DM threads.")
+                        return self.active_threads_dm
+                    else:
+                        logger.warning("Cached threads found, but expired.")
+                else:
+                    logger.warning("No cached threads found.")
+
+        logger.info(f"Updating active { 'guild' if guildMode else 'DM' } threads.")
 
         shell = self.shell.get_channel()
-        
+
         if shell is None:
-            print("[Impersonate] Failed to fetch threads: Shell channel not found.")
+            logger.error("Failed to fetch threads: Shell channel not found.")
             return
-        
+
         threads: list[discord.Thread] = shell.threads
 
         threads = [
-            thread for thread in threads if thread.name.split('//')[1].startswith("&&guild." if guildMode else "&&dm.")
+            thread
+            for thread in threads
+            if thread.name.split("//")[1].startswith(
+                "&&guild." if guildMode else "&&dm."
+            )
         ]
 
         # Check for duplicate threads
-        print("[Impersonate] Checking for duplicate threads.")
+        logger.info("Checking for duplicate threads.")
         threads_processed = []
         modified = False
         for thread in threads:
             name = thread.name.split("//")[1]
-            print(f"[Impersonate] Processing thread: {name} from {thread.name}")
+            # logger.info(f"Processing thread: {name} from {thread.name}")
             if name not in threads_processed:
                 threads_processed.append(name)
             else:
@@ -88,13 +98,13 @@ class ImpersonateCore:
                         title="Impersonate Thread Cleanup",
                         cog="ImpersonateCore",
                     )
-        
+
         thread_names = {}
         for thread in threads:
             name = thread.name.split("//")[1]
             thread_names[name] = thread
 
-        print("[Impersonate] Active threads updated.")
+        logger.info("Active threads updated.")
 
         if guildMode:
             self.active_threads_guild = (threads, thread_names)
@@ -106,15 +116,19 @@ class ImpersonateCore:
             self.active_threads_dm_time = time.time()
 
             return self.active_threads_dm
-    
+
     async def generate_embeds(self, message: discord.Message) -> list[discord.Embed]:
         """Generate embeds for a given message."""
         embeds = []
 
         if message.reference:
-            ref_message = await message.channel.fetch_message(message.reference.message_id)
+            ref_message = await message.channel.fetch_message(
+                message.reference.message_id
+            )
             ref_embed = discord.Embed(
-                description=(ref_message.content if ref_message.content else "Empty message."),
+                description=(
+                    ref_message.content if ref_message.content else "Empty message."
+                ),
                 title="Replying to:",
                 color=discord.Color.red(),
             )
@@ -154,8 +168,8 @@ class ImpersonateCore:
             if dm:
                 thread = await self.get_thread(user=message.author)
                 channel = message.channel
-                print(
-                    "[Impersonate] Incoming message from: ",
+                logger.info(
+                    "Incoming message from: ",
                     message.author.name,
                     " in DMs",
                 )
@@ -163,8 +177,8 @@ class ImpersonateCore:
                 thread = await self.get_thread(channel=message.channel)
                 guild = message.guild
                 channel = message.channel
-                print(
-                    "[Impersonate] Incoming message from: ",
+                logger.info(
+                    "Incoming message from: ",
                     message.author.name,
                     " in ",
                     guild.name,
@@ -195,19 +209,19 @@ class ImpersonateCore:
 
         else:
             thread = message.channel
-            
+
             if dm:
                 user_id = thread.name.split(".")[-1]
                 user = self.bot.get_user(int(user_id))
                 channel = user.dm_channel
                 if channel is None:
-                    print("[Impersonate] Creating DM channel with: ", user.name)
+                    logger.info("Creating DM channel with: ", user.name)
                     channel = await user.create_dm()
-                print("[Impersonate] Outgoing message to: ", user.name)
+                logger.info("Outgoing message to: ", user.name)
             else:
                 guild_id = thread.name.split(".")[-2]
                 channel_id = thread.name.split(".")[-1].split("//")[0]
-                print("[Impersonate] Outgoing message to: ", guild_id, " - ", channel_id)
+                logger.info("Outgoing message to: ", guild_id, " - ", channel_id)
                 guild = self.bot.get_guild(int(guild_id))
                 channel = guild.get_channel(int(channel_id))
 
@@ -245,19 +259,23 @@ class ImpersonateCore:
                         )
                     except discord.Forbidden:
                         if dm:
-                            await message.reply("They blocked me 😭 (Cannot send messages to user)")
-                        else:   
-                            await message.reply("I cannot send messages to this channel.")
-                            
+                            await message.reply(
+                                "They blocked me 😭 (Cannot send messages to user)"
+                            )
+                        else:
+                            await message.reply(
+                                "I cannot send messages to this channel."
+                            )
+
                         await message.add_reaction("❌")
-                            
+
                     except Exception as e:
-                        await message.reply(f"Failed to send message: {e}")             
+                        await message.reply(f"Failed to send message: {e}")
                         await message.add_reaction("❌")
-                        
+
                     else:
-                        await message.add_reaction("✅")  
-                        return   
+                        await message.add_reaction("✅")
+                        return
 
             try:
                 await channel.send(
@@ -267,25 +285,27 @@ class ImpersonateCore:
                 )
             except discord.Forbidden:
                 if dm:
-                    await message.reply("They blocked me 😭 (Cannot send messages to user)")
-                else:   
+                    await message.reply(
+                        "They blocked me 😭 (Cannot send messages to user)"
+                    )
+                else:
                     await message.reply("I cannot send messages to this channel.")
-                    
+
                 await message.add_reaction("❌")
-                    
+
             except Exception as e:
-                await message.reply(f"Failed to send message: {e}")             
+                await message.reply(f"Failed to send message: {e}")
                 await message.add_reaction("❌")
-                
+
             else:
-                await message.add_reaction("✅")          
+                await message.add_reaction("✅")
 
     async def get_thread(
         self, channel: discord.TextChannel = None, user: discord.User = None, **kwargs
     ):
         """Create a thread to impersonate the bot inside the shell channel."""
-        print(
-            "[Impersonate] Getting thread for:",
+        logger.info(
+            "Getting thread for:",
             channel.name if channel is not None else user.name,
         )
 
@@ -316,16 +336,16 @@ class ImpersonateCore:
         else:
             name = f"&&dm.{user.id}"
             name_readable = f"{user.name}//{name}"
-            
-        print("[Impersonate] Constructed thread name: ", name_readable)
+
+        logger.info("Constructed thread name: ", name_readable)
 
         if name in thread_names:
             # Get the thread
-            print("[Impersonate] Thread exists.")
+            logger.info("Thread exists.")
             thread = thread_names[name]
         else:
             # Create a new thread
-            print("[Impersonate] Thread does not exist, creating.")
+            logger.info("Thread does not exist, creating.")
             message = await self.shell.log(
                 f"Creating thread for {f'{channel.guild.name} - {channel.name}' if user is None else f'{user.name}#{user.discriminator}'}.",
                 title="Impersonation Thread",
@@ -334,14 +354,14 @@ class ImpersonateCore:
             thread = await message.create_thread(
                 name=name_readable, auto_archive_duration=60
             )
-            
+
             # Populate the thread
             if user is None:
                 await self.populate_thread(thread, channel=channel)
             else:
                 await self.populate_thread(thread, user=user)
-            
-            print("[Impersonate] Thread created, updating active threads.")
+
+            logger.info("Thread created, updating active threads.")
             await self.active_threads(guildMode=(user is None), forceUpdate=True)
             await thread.send(
                 embed=discord.Embed(
@@ -355,53 +375,62 @@ class ImpersonateCore:
     async def clear(self, guild: bool = False, dm: bool = False):
         if (not guild) and (not dm):
             raise ValueError("No mode selected (guild or dm)")
-        
+
         if guild:
             threads, thread_names = await self.active_threads(guildMode=True)
             for thread in threads:
                 await thread.delete()
             await self.active_threads(guildMode=True, forceUpdate=True)
-            
+
         if dm:
             threads, thread_names = await self.active_threads(guildMode=False)
             for thread in threads:
                 await thread.delete()
             await self.active_threads(guildMode=False, forceUpdate=True)
 
-    async def populate_thread(self, thread: discord.Thread, channel: discord.TextChannel=None, user: discord.User=None, hours :int = 24):
+    async def populate_thread(
+        self,
+        thread: discord.Thread,
+        channel: discord.TextChannel = None,
+        user: discord.User = None,
+        hours: int = 24,
+    ):
         """Populate a thread with messages from a channel.
-        
+
         Args:
             thread (discord.Thread): The thread to populate.
             channel (discord.TextChannel): The channel to populate the thread with. (Channel mode)
             user (discord.User): The user to populate the thread with. (DM mode)
             hours (int): The number of hours to populate the thread with. Use None to populate all messages.
-        
+
         Returns:
             discord.Thread: The populated thread.
         """
-        
+
         if channel is None and user is None:
             raise ValueError("No channel or user specified.")
-        
+
         if channel is None and user is not None:
             channel = user.dm_channel
-            
+
         # Retrieve messages
         try:
             messages = []
-            async for message in channel.history(limit=None, after=(datetime.datetime.now() - datetime.timedelta(hours=hours))):
+            async for message in channel.history(
+                limit=None,
+                after=(datetime.datetime.now() - datetime.timedelta(hours=hours)),
+            ):
                 messages.append(message)
         except AttributeError:
-            print("[Impersonate] No message history found.")
+            logger.info("No message history found.")
             return thread
-        
+
         if not messages:
             return thread
-        
+
         # Sort messages by time
         messages.sort(key=lambda message: message.created_at)
-        
+
         # Populate the thread
         for message in messages:
             try:
@@ -409,19 +438,28 @@ class ImpersonateCore:
                 await thread.send(
                     content="",
                     embeds=embeds,
-                    files=[await attachment.to_file() for attachment in message.attachments],
+                    files=[
+                        await attachment.to_file() for attachment in message.attachments
+                    ],
                 )
             except Exception as e:
-                await self.shell.log(f"Failed to populate thread: {e}", title="Impersonation Thread Population Error", cog="ImpersonateCore")
+                await self.shell.log(
+                    f"Failed to populate thread: {e}",
+                    title="Impersonation Thread Population Error",
+                    cog="ImpersonateCore",
+                )
                 break
-            
+
         return thread
+
 
 class ImpersonateGuild(commands.Cog):
     def __init__(self, bot: commands.Bot, shell: ShellCore):
         self.bot = bot
         self.shell = shell
         self.core = ImpersonateCore(bot, shell)
+
+        self.logger = logging.getLogger("core.impersonate.guild")
 
         shell.add_command(
             "impersonate-guild",
@@ -436,11 +474,11 @@ class ImpersonateGuild(commands.Cog):
 
     @commands.Cog.listener()
     async def on_ready(self):
-        print("[ImpersonateGuild] Ready, starting tasks.")
+        self.logger.info("Ready, starting tasks.")
 
     async def cog_status(self):
         active_threads = await self.core.active_threads(guildMode=True)
-        
+
         return f"Ready: Listening to {len(active_threads[0])} guild channels."
 
     @commands.Cog.listener()
@@ -450,9 +488,9 @@ class ImpersonateGuild(commands.Cog):
 
         if message.guild is None:
             return
-        
+
         if self.bot.is_ready() is False:
-            print("[ImpersonateGuild] Failed to process message: Bot is not ready.")
+            self.logger.error("Failed to process message: Bot is not ready.")
             return
 
         threads, thread_names = await self.core.active_threads(guildMode=True)
@@ -478,17 +516,15 @@ class ImpersonateGuild(commands.Cog):
 
         name = f"&&guild.{message.guild.id}.{message.channel.id}"
         if name in thread_names.keys():
-            print(
-                "[ImpersonateGuild] Incoming message has matching thread, processing."
-            )
+            self.logger.info("Incoming message has matching thread, processing.")
             await self.core.handle(message=message, incoming=True)
 
     async def shell_callback(self, command: ShellCommand):
         if command.name == "impersonate-guild" or command.name == "ig":
             query = command.query
-            print("[ImpersonateGuild] Thread requseted with query:", query)
-            
-            #* Special commands
+            self.logger.info("Thread requseted with query:", query)
+
+            # * Special commands
             if query == "!clear":
                 try:
                     await self.core.clear(guild=True)
@@ -533,7 +569,7 @@ class ImpersonateGuild(commands.Cog):
                     msg_type="success",
                 )
                 return
-            
+
             elif query == "" or query is None or query == "!help":
                 await command.log(
                     "Impersonate the bot in a guild channel. Accepted formats: Guild ID::Channel ID, Discord URL, or Channel Mention. Special commands: !clear, !list, !update.",
@@ -541,7 +577,6 @@ class ImpersonateGuild(commands.Cog):
                     msg_type="info",
                 )
                 return
-                
 
             # Discord url parsing
             if query.startswith("https://discord.com/channels/"):
@@ -604,7 +639,9 @@ class ImpersonateGuild(commands.Cog):
                 )
                 return
 
-            print(f"[ImpersonateGuild] {guild.name} - {channel.name}")
+            self.logger.info(
+                f"Requesting thread for {guild.name} - {channel.name} ({guild.id}::{channel.id})"
+            )
 
             try:
                 thread = await self.core.get_thread(channel=channel)
@@ -629,6 +666,8 @@ class ImpersonateDM(commands.Cog):
         self.shell = shell
         self.core = ImpersonateCore(bot, shell)
 
+        self.logger = logging.getLogger("core.impersonate.dm")
+
         shell.add_command(
             "impersonate-dm",
             "ImpersonateDM",
@@ -642,20 +681,20 @@ class ImpersonateDM(commands.Cog):
 
     @commands.Cog.listener()
     async def on_ready(self):
-        print("[ImpersonateDM] Ready, starting tasks.")
+        self.logger.info("Ready, starting tasks.")
 
     async def cog_status(self):
         active_threads = await self.core.active_threads(guildMode=False)
-        
+
         return f"Ready: Listening to {len(active_threads[0])} DMs."
 
     @commands.Cog.listener()
     async def on_message(self, message: discord.Message):
         if message.author == self.bot.user:
             return
-        
+
         if self.bot.is_ready() is False:
-            print("[ImpersonateDM] Could not process message: Bot is not ready.")
+            self.logger.error("Could not process message: Bot is not ready.")
             return
 
         threads, thread_names = await self.core.active_threads(guildMode=False)
@@ -677,18 +716,17 @@ class ImpersonateDM(commands.Cog):
                 and message.channel.parent_id == self.shell.channel_id
             ):
                 await self.core.handle(message=message, incoming=False, dm=True)
-            
-        
+
         if not isinstance(message.channel, discord.DMChannel):
             return
-        
+
         name = f"&&dm.{message.author.id}"
         if name in thread_names.keys():
-            print(
-                "[ImpersonateGuild] Incoming message has matching thread, processing."
-            )
+            self.logger.info("Incoming message has matching thread, processing.")
         else:
-            print("[ImpersonateDM] Incoming message does not have a matching thread; creating one.")
+            self.logger.info(
+                "Incoming message does not have a matching thread; creating one."
+            )
             await self.shell.log(
                 f"Detected incoming message from {message.author.mention} ({message.author.name}). Creating thread for DM impersonation.",
                 title="DM Impersonation",
@@ -703,17 +741,15 @@ class ImpersonateDM(commands.Cog):
                     cog="ImpersonateDM",
                 )
                 return
-            
-        await self.core.handle(message=message, incoming=True, dm=True)
 
-            
+        await self.core.handle(message=message, incoming=True, dm=True)
 
     async def shell_callback(self, command: ShellCommand):
         if command.name == "impersonate-dm" or command.name == "idm":
             query = command.query
-            print("[ImpersonateDM] Thread requested with query:", query)
+            self.logger.info("Thread requested with query:", query)
 
-            #* Special commands
+            # * Special commands
             if query == "!clear":
                 try:
                     await self.core.clear(dm=True)
@@ -769,9 +805,9 @@ class ImpersonateDM(commands.Cog):
             # Parse input
             if query.startswith("<@") and query.endswith(">"):
                 try:
-                    print(f"[ImpersonateDM] Looking for mention: {query}")
+                    self.logger.info(f"Looking for mention: {query}")
                     user_id = int(query[2:-1])
-                    print(f"[ImpersonateDM] Found user ID: {user_id}")
+                    self.logger.info(f"Found user ID: {user_id}")
                     user = self.bot.get_user(user_id)
                 except:
                     await command.log(
@@ -788,7 +824,7 @@ class ImpersonateDM(commands.Cog):
                     )
                     return
             else:
-                print(f"[ImpersonateDM] Looking for username: {query}")
+                self.logger.info(f"Looking for username: {query}")
                 user = discord.utils.get(self.bot.users, name=query)
                 if user is None:
                     await command.log(
@@ -798,7 +834,7 @@ class ImpersonateDM(commands.Cog):
                     )
                     return
 
-            print(f"[ImpersonateDM] {user.name} (ID: {user.id})")
+            self.logger.info(f"Requesting thread for {user.name} ({user.id})")
 
             try:
                 thread = await self.core.get_thread(user=user)
@@ -818,7 +854,7 @@ class ImpersonateDM(commands.Cog):
                 )
                 return
 
-            print(f"[ImpersonateDM] Impersonation thread: {thread.name}")
+            self.logger.info(f"Impersonation thread: {thread.name}")
 
             await command.log(
                 f"Impersonation Thread: {thread.mention}",
