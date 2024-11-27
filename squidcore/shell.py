@@ -233,12 +233,17 @@ class ShellCore:
         # Remove bot prefix (name)
         if not internal:
             message.content = " ".join(message.content.split(" ")[1:])
+        logger.debug(f"Executing command: '{message.content}'")
 
         # Check if command is empty
         try:
             command = message.content.split(" ")[0].lower()
         except IndexError:
             command = "help"
+        if command == "":
+            command = "help"
+            
+        logger.debug(f"Command: '{command}'")
 
         # Find the command in the command list
         for cmd in self.commands:
