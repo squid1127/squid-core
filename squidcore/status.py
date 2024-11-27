@@ -10,10 +10,24 @@ import random
 # Shell
 from .shell import ShellCommand
 
+# Logger
+import logging
+
+logger = logging.getLogger("core.status")
+
+
+class StatusTypes:
+    PLAYING = "playing"
+    WATCHING = "watching"
+    LISTENING = "listening"
+    STREAMING = "streaming"
+    CUSTOM = "custom"
+
+
 class Status:
     """
     A class to represent a Discord status.
-    
+
     Attributes
     ----------
     type : str
@@ -22,41 +36,57 @@ class Status:
         The message associated with the status.
     **kwargs : dict
         Additional keyword arguments for the status.
-        
+
     Methods
     -------
     __call__() -> discord.Activity:
         Returns a discord.Activity object based on the status type and message.
     """
-    
-    def __init__(self, type: str, message: str, **kwargs):
+
+    def __init__(self, status_type: str, message: str, **kwargs):
         self.message = message
-        if type not in self.STATUS_TYPES:
-            raise ValueError(f"Invalid status type: {type}")
-        self.type = type
+        if status_type not in [
+            StatusTypes.PLAYING,
+            StatusTypes.WATCHING,
+            StatusTypes.LISTENING,
+            StatusTypes.STREAMING,
+            StatusTypes.CUSTOM,
+        ]:
+            raise ValueError(f"Invalid status type: {status_type}")
+
+        self.status_type = status_type
         self.activity_kwargs = kwargs
 
     def __call__(self) -> discord.Activity:
-        if self.type == "playing":
+        if self.status_type == "playing":
             return discord.Game(name=self.message, **self.activity_kwargs)
-        elif self.type == "streaming":
+        elif self.status_type == "streaming":
             return discord.Streaming(name=self.message, **self.activity_kwargs)
-        elif self.type == "listening":
+        elif self.status_type == "listening":
             return discord.Activity(
-                type=discord.ActivityType.listening, name=self.message, **self.activity_kwargs
+                type=discord.ActivityType.listening,
+                name=self.message,
+                **self.activity_kwargs,
             )
-        elif self.type == "watching":
+        elif self.status_type == "watching":
             return discord.Activity(
-                type=discord.ActivityType.watching, name=self.message, **self.activity_kwargs
+                type=discord.ActivityType.watching,
+                name=self.message,
+                **self.activity_kwargs,
             )
-        elif self.type == "custom":
-            return discord.Activity(
-                type=discord.ActivityType.custom, name=self.message, **self.activity_kwargs
-            )
-            
-    
-    STATUS_TYPES = ["playing", "watching", "listening", "streaming", "custom"]
+        elif self.status_type == "custom":
+            return discord.CustomActivity(name=self.message, **self.activity_kwargs)
 
+    def __str__(self):
+        return (
+            f"{self.status_type.title()} {self.message}"
+            if self.status_type != "custom"
+            else self.message
+        )
+
+    async def apply_self(self, bot: commands.Bot):
+        """Applies the status to the bot"""
+        await bot.change_presence(activity=self())
 
 
 class RandomStatus(commands.Cog):
@@ -65,23 +95,25 @@ class RandomStatus(commands.Cog):
 
         self.status_list = status_list
         self.interval_hours = 24  #! Currently hardcoded because decorators are selly
-        
-        self.bot.shell.add_command("rand_status", description="Change the bot's status", cog="RandomStatus")
+
+        self.bot.shell.add_command(
+            "rand_status", description="Change the bot's status", cog="RandomStatus"
+        )
 
     # Status task
     @tasks.loop(hours=24)
     async def change_status(self):
-        print("[Core.RandomStatus] Changing status")
+        logger.info("Changing status")
         status = random.choice(self.status_list)
-        await self.bot.change_presence(activity=status())
-        print(f"[Core.RandomStatus] Status changed to {status.type} {status.message}")
+        await status.apply_self(self.bot)
+        logger.info(f"Status changed to {status}")
 
     # Start the loop
     @commands.Cog.listener()
     async def on_ready(self):
         self.change_status.start()
-        print(f"[Core.RandomStatus] Random status loop started (Daily)")
-        
+        logger.info("RandomStatus loop started (24 hours)")
+
     # Shell command
     async def shell_callback(self, command: ShellCommand):
         if command.name == "rand_status":
@@ -103,13 +135,14 @@ class RandomStatus(commands.Cog):
                     )
                     return
             else:
-                            status = random.choice(self.status_list)
-            await self.bot.change_presence(activity=status())
+                status = random.choice(self.status_list)
+            await status.apply_self(self.bot)
             await command.log(
-                f"Status changed to {status.type} {status.message}",
+                f"Status changed to {status}",
                 title="Status Changed",
                 msg_type="success",
             )
+
     async def cog_status(self):
         return f"Ready: {len(self.status_list)} statuses"
 
