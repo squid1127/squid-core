@@ -409,6 +409,8 @@ class DiscordExplorer(commands.Cog):
 
             # Remove duplicates.
             entries.extend(list(set(members)))
+            
+        parse_result = self._post_process(parse_result, entries)
 
         return {"failed": False, "result": entries, "request": parse_result}
 
@@ -423,7 +425,10 @@ class DiscordExplorer(commands.Cog):
             dict: The parsed query.
         """
 
-        result = {"failed": False}
+        result = {
+            "failed": False,
+            "missing": [],
+        }
 
         # * Pre-programed filter vaild syntax.
         filter_syntax = {
@@ -500,6 +505,25 @@ class DiscordExplorer(commands.Cog):
                 }
 
         return result
+    
+    def _post_process(self, query_data: dict, query_result:list) -> dict:
+        """Post-process the query data, adding additional information."""
+        
+        if query_data["type"] == "guild":
+            if not "guild" in query_data and len(query_result) == 1:
+                query_data["guild"] = query_result[0].id
+                
+        elif query_data["type"] == "channel":
+            for channel in query_result:
+                if not "guild" in query_data:
+                    query_data["guild"] = channel.guild.id
+                    
+            if not "channel" in query_data and len(query_result) == 1:
+                query_data["channel"] = query_result[0].id
+                
+        return query_data
+            
+        
 
     async def query_format(self, items: list, split: bool = False, view: str = None):
         """Transform a list of discord objects into a markdown string (or list of strings)."""
