@@ -13,7 +13,7 @@ from pathlib import Path
 # * Internal Packages & Imports
 from .shell import ShellCore, ShellHandler, ShellCommand  # Shell
 from .db import *  # Database
-from .status import RandomStatus, Status  # Random Status
+from .status import RandomStatus  # Random Status
 from .files import *  # File management
 from .impersonate import *  # Impersonation (Talking as the bot and dm handling)
 from .explorer import *  # Discord Explorer
@@ -114,7 +114,7 @@ class Bot(commands.Bot):
         except Exception as e:
             logger.error(f"Failed to add database handler: {e}")
             
-    def set_status(self, random_status: list[Status] = None, static_status: Status = None):
+    def set_status(self, random_status: list[discord.Activity] = None, static_status: discord.Activity = None):
         
         if random_status:
             asyncio.run(self.add_cog(RandomStatus(self, random_status)))
