@@ -187,6 +187,110 @@ class ShellCore:
         self.channel = self.bot.get_channel(self.channel_id)
         return self.channel
 
+    async def execute_command(self, message: discord.Message, override_interactive:bool=False, internal:bool=False) -> str:
+        try:
+            self.channel
+        except AttributeError:
+            logger.error("Shell channel not found!")
+            return
+
+        # Interactive mode
+        if self.interactive_mode[0] is not None and not override_interactive:
+            logger.info(f"Facilitating interactive mode for {self.interactive_mode[0]}")
+            cog = self.interactive_mode[0]
+            callback = self.interactive_mode[1]
+
+            if message.content == "exit":
+                self.interactive_mode = (None, None)
+                await self.log(
+                    f"Returning to normal shell mode.",
+                    title="Interactive Mode",
+                    msg_type="info",
+                    cog="Shell",
+                )
+                return
+
+            commandClass = ShellCommand(
+                name=callback,
+                cog=cog,
+                shell=self,
+                query=message.content,
+                message=message,
+            )
+
+            try:
+                await self.bot.cogs[cog].shell_callback(commandClass)
+            except Exception as e:
+                await self.log(
+                    f"An unknown error occurred facilitating interactive mode: {e}",
+                    title="Interactive Mode Error",
+                    msg_type="error",
+                    cog="Shell",
+                )
+
+            return
+        
+        # Remove bot prefix (name)
+        if not internal:
+            message.content = " ".join(message.content.split(" ")[1:])
+
+        # Check if command is empty
+        try:
+            command = message.content.split(" ")[0].lower()
+        except IndexError:
+            command = "help"
+
+        # Find the command in the command list
+        for cmd in self.commands:
+            if cmd.command == command:
+                commandEntry: ShellCommandEntry = cmd
+                break
+        else:
+            await self.log(
+                f"Command `{command}` not found, use `{self.name.lower()} help` to see available commands.",
+                title="Command Not Found",
+                msg_type="error",
+                cog="Shell",
+            )
+            return
+
+        commandClass = ShellCommand(
+            name=commandEntry.command,
+            cog=commandEntry.cog,
+            shell=self,
+            query=" ".join(message.content.split(" ")[1:]),
+            message=message,
+        )
+
+        # Execute the command
+        try:
+            if commandEntry.callback:
+                await commandEntry.callback(commandClass)
+            else:
+                await self.bot.cogs[commandEntry.cog].shell_callback(commandClass)
+        except KeyError:
+            await self.log(
+                f"Command `{command}` is registered, but its cog ({commandEntry.cog}) cannot be found.",
+                title="Command Error",
+                msg_type="error",
+                cog="Shell",
+            )
+        except AttributeError:
+            await self.log(
+                f"Command `{command}` is registered, but the cog `{commandEntry.cog}` does not have a shell implementation.",
+                title="Command Error",
+                msg_type="error",
+                cog="Shell",
+            )
+        except Exception as e:
+            await self.log(
+                f"An unknown error occurred while executing command `{command}`: {e}",
+                title="Command Error",
+                msg_type="error",
+                cog="Shell",
+            )
+        return
+
 
 class ShellCommand:
     """
@@ -368,109 +472,7 @@ class ShellHandler(commands.Cog):
                 message.content.startswith(f"{self.core.name.lower()}")
                 or self.core.interactive_mode[0] is not None
             ):
-                result = await self.execute_command(message)
-
-    # Shell command parser
-    async def execute_command(self, message: discord.Message) -> str:
-        try:
-            self.core.channel
-        except AttributeError:
-            self.logger.error("Shell channel not found!")
-            return
-
-        # Interactive mode
-        if self.core.interactive_mode[0] is not None:
-            self.logger.info(f"Facilitating interactive mode for {self.core.interactive_mode[0]}")
-            cog = self.core.interactive_mode[0]
-            callback = self.core.interactive_mode[1]
-
-            if message.content == "exit":
-                self.core.interactive_mode = (None, None)
-                await self.core.log(
-                    f"Returning to normal shell mode.",
-                    title="Interactive Mode",
-                    msg_type="info",
-                    cog="Shell",
-                )
-                return
-
-            commandClass = ShellCommand(
-                name=callback,
-                cog=cog,
-                shell=self.core,
-                query=message.content,
-                message=message,
-            )
-
-            try:
-                await self.bot.cogs[cog].shell_callback(commandClass)
-            except Exception as e:
-                await self.core.log(
-                    f"An unknown error occurred facilitating interactive mode: {e}",
-                    title="Interactive Mode Error",
-                    msg_type="error",
-                    cog="Shell",
-                )
-
-            return
-
-        # Check if command is empty
-        try:
-            command = message.content.split(" ")[1].lower()
-        except IndexError:
-            command = "help"
-
-        # Find the command in the command list
-        # print(self.core.commands)
-        for cmd in self.core.commands:
-            if cmd.command == command:
-                commandEntry: ShellCommandEntry = cmd
-                break
-        else:
-            await self.core.log(
-                f"Command `{command}` not found, use `{self.core.name.lower()} help` to see available commands.",
-                title="Command Not Found",
-                msg_type="error",
-                cog="Shell",
-            )
-            return
-
-        commandClass = ShellCommand(
-            name=commandEntry.command,
-            cog=commandEntry.cog,
-            shell=self.core,
-            query=" ".join(message.content.split(" ")[2:]),
-            message=message,
-        )
-
-        # Execute the command
-        try:
-            if commandEntry.callback:
-                await commandEntry.callback(commandClass)
-            else:
-                await self.bot.cogs[commandEntry.cog].shell_callback(commandClass)
-        except KeyError:
-            await self.core.log(
-                f"Command `{command}` is registered, but its cog ({commandEntry.cog}) cannot be found.",
-                title="Command Error",
-                msg_type="error",
-                cog="Shell",
-            )
-        except AttributeError:
-            await self.core.log(
-                f"Command `{command}` is registered, but the cog `{commandEntry.cog}` does not have a shell implementation.",
-                title="Command Error",
-                msg_type="error",
-                cog="Shell",
-            )
-        except Exception as e:
-            await self.core.log(
-                f"An unknown error occurred while executing command `{command}`: {e}",
-                title="Command Error",
-                msg_type="error",
-                cog="Shell",
-            )
-        return
+                result = await self.core.execute_command(message)
 
     async def shell_callback(self, command: ShellCommand):
         """Shell command callback"""
