@@ -129,24 +129,28 @@ class ImpersonateCore:
             
 
         if message.reference:
-            ref_message = await message.channel.fetch_message(
-                message.reference.message_id
-            )
-            ref_embed = discord.Embed(
-                description=(
-                    ref_message.content if ref_message.content else "Empty message."
-                ),
-                title="Replying to:",
-                color=discord.Color.red(),
-            )
-            ref_embed.set_author(
-                name=ref_message.author.display_name,
-                icon_url=ref_message.author.avatar.url,
-            )
-            embeds.append(ref_embed)
-            if ref_message.embeds:
-                for embed in ref_message.embeds:
-                    embeds.append(embed)
+            try:
+                ref_message = await message.channel.fetch_message(
+                    message.reference.message_id
+                )
+            except:
+                ref_message = None
+            else:
+                ref_embed = discord.Embed(
+                    description=(
+                        ref_message.content if ref_message.content else "Empty message."
+                    ),
+                    title="Replying to:",
+                    color=discord.Color.red(),
+                )
+                ref_embed.set_author(
+                    name=ref_message.author.display_name,
+                    icon_url=ref_message.author.avatar.url,
+                )
+                embeds.append(ref_embed)
+                if ref_message.embeds:
+                    for embed in ref_message.embeds:
+                        embeds.append(embed)
 
         msg_embed = discord.Embed(
             description=message.content if message.content else empty_message,
