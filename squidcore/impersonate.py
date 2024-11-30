@@ -120,6 +120,13 @@ class ImpersonateCore:
     async def generate_embeds(self, message: discord.Message) -> list[discord.Embed]:
         """Generate embeds for a given message."""
         embeds = []
+        
+        empty_message = "Empty message."
+        if len(message.embeds) > 0:
+            empty_message = "See Embeds"
+        if len(message.attachments) > 0:
+            empty_message = "See Attachments"
+            
 
         if message.reference:
             ref_message = await message.channel.fetch_message(
@@ -142,13 +149,24 @@ class ImpersonateCore:
                     embeds.append(embed)
 
         msg_embed = discord.Embed(
-            description=message.content if message.content else "Empty message.",
+            description=message.content if message.content else empty_message,
             color=discord.Color.blurple(),
         )
-        msg_embed.set_author(
-            name=message.author.display_name,
-            icon_url=message.author.avatar.url,
-        )
+        
+        # Special user handling
+        if message.author == self.bot.user:
+            msg_embed.color = discord.Color.green()
+            msg_embed.set_author(
+                name=f"{self.bot.user.display_name} (Me)",
+                icon_url=self.bot.user.avatar.url,
+            )
+        else:
+            msg_embed.set_author(
+                name=message.author.display_name,
+                icon_url=message.author.avatar.url,
+            )
+            
+
         msg_embed.set_footer(
             text=f"||MSGID.{message.id}||",
         )
@@ -169,21 +187,19 @@ class ImpersonateCore:
                 thread = await self.get_thread(user=message.author)
                 channel = message.channel
                 logger.info(
-                    "Incoming message from: ",
-                    message.author.name,
-                    " in DMs",
+                    "Incoming message from: " + message.author.name + " in DMs",
                 )
             else:
                 thread = await self.get_thread(channel=message.channel)
                 guild = message.guild
                 channel = message.channel
                 logger.info(
-                    "Incoming message from: ",
-                    message.author.name,
-                    " in ",
-                    guild.name,
-                    " - ",
-                    channel.name,
+                    "Incoming message from: "
+                    + message.author.name
+                    + " in "
+                    + guild.name
+                    + " - "
+                    + channel.name,
                 )
 
             # Attachments handling
@@ -221,7 +237,7 @@ class ImpersonateCore:
             else:
                 guild_id = thread.name.split(".")[-2]
                 channel_id = thread.name.split(".")[-1].split("//")[0]
-                logger.info("Outgoing message to: "+ guild_id+ " - "+ channel_id)
+                logger.info("Outgoing message to: " + guild_id + " - " + channel_id)
                 guild = self.bot.get_guild(int(guild_id))
                 channel = guild.get_channel(int(channel_id))
 
@@ -232,6 +248,7 @@ class ImpersonateCore:
             else:
                 files = None
 
+            reply_to = None
             if message.reference:
                 ref_message = await thread.fetch_message(message.reference.message_id)
 
@@ -249,47 +266,33 @@ class ImpersonateCore:
                     msg_id = None
 
                 if msg_id:
-                    ref_message = await channel.fetch_message(msg_id)
-
-                    try:
-                        await ref_message.reply(
-                            message.content,
-                            embed=message.embeds[0] if message.embeds else None,
-                            files=files,
-                        )
-                    except discord.Forbidden:
-                        if dm:
-                            await message.reply(
-                                "They blocked me 😭 (Cannot send messages to user)"
-                            )
-                        else:
-                            await message.reply(
-                                "I cannot send messages to this channel."
-                            )
-
-                        await message.add_reaction("❌")
-
-                    except Exception as e:
-                        await message.reply(f"Failed to send message: {e}")
-                        await message.add_reaction("❌")
-
-                    else:
-                        await message.add_reaction("✅")
-                        return
+                    reply_to = await channel.fetch_message(msg_id)
 
             try:
-                await channel.send(
-                    message.content,
-                    embed=message.embeds[0] if message.embeds else None,
-                    files=files,
-                )
+                if reply_to:
+                    await reply_to.reply(
+                        message.content,
+                        embed=message.embeds[0] if message.embeds else None,
+                        files=files,
+                    )
+                else:
+                    await channel.send(
+                        message.content,
+                        embed=message.embeds[0] if message.embeds else None,
+                        files=files,
+                    )
+
             except discord.Forbidden:
                 if dm:
                     await message.reply(
                         "They blocked me 😭 (Cannot send messages to user)"
                     )
                 else:
-                    await message.reply("I cannot send messages to this channel.")
+                    # Check for timeout
+                    if channel.guild.me.is_timed_out():
+                        await message.reply("Somebody put me in the timeout corner 😭")
+                    else:
+                        await message.reply("I cannot send messages to this channel.")
 
                 await message.add_reaction("❌")
 
@@ -298,15 +301,15 @@ class ImpersonateCore:
                 await message.add_reaction("❌")
 
             else:
-                await message.add_reaction("✅")
+                await message.delete()
+                # await message.add_reaction("✅")
 
     async def get_thread(
         self, channel: discord.TextChannel = None, user: discord.User = None, **kwargs
     ):
         """Create a thread to impersonate the bot inside the shell channel."""
         logger.info(
-            "Getting thread for:",
-            channel.name if channel is not None else user.name,
+            "Getting thread for:" + channel.name if channel is not None else user.name,
         )
 
         if channel is None and user is None:
@@ -337,7 +340,7 @@ class ImpersonateCore:
             name = f"&&dm.{user.id}"
             name_readable = f"{user.name}//{name}"
 
-        logger.info("Constructed thread name: ", name_readable)
+        logger.info("Constructed thread name: " + name_readable)
 
         if name in thread_names:
             # Get the thread

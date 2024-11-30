@@ -17,10 +17,12 @@ from .status import RandomStatus  # Random Status
 from .files import *  # File management
 from .impersonate import *  # Impersonation (Talking as the bot and dm handling)
 from .explorer import *  # Discord Explorer
+from .downreport import *  # Downreport
 
 # Logs
 import logging
 from .log_setup import logger
+
 
 # * Core
 class Bot(commands.Bot):
@@ -40,7 +42,7 @@ class Bot(commands.Bot):
         name (str): The name of the Discord bot.
         shell_channel (int): The ID of the shell channel.
     """
-    
+
     def __init__(
         self,
         token: str,
@@ -52,9 +54,9 @@ class Bot(commands.Bot):
         self.shell_channel = shell_channel
         self.has_db = False
         self.db = None
-        
+
         self.sync_commands = True
-        
+
         self.cog_cache = {}
 
         # Shell
@@ -113,27 +115,48 @@ class Bot(commands.Bot):
             )
         except Exception as e:
             logger.error(f"Failed to add database handler: {e}")
-            
-    def set_status(self, random_status: list[discord.Activity] = None, static_status: discord.Activity = None):
-        
+
+    def set_status(
+        self,
+        random_status: list[discord.Activity] = None,
+        static_status: discord.Activity = None,
+    ):
+
         if random_status:
             asyncio.run(self.add_cog(RandomStatus(self, random_status)))
         elif static_status:
             self.static_status = static_status
         else:
             raise ValueError("No status provided")
-        
 
-    def run(self):
-        """Start the bot"""
-        logger.info(f"Running bot {self.name}")
-        super().run(token=self.token)
+    def run(self, token:str=None, logkeyinterupt=False, *args, **kwargs):
+        """
+        Runs the bot and handle errors.
+        
+        Args:
+            token (str): The token for the Discord bot.
+            logkeyinterupt (bool): Whether the bot will consider a keyboard interrupt as an error.
+        """
+        if not token:
+            token = self.token
+        
+        try:
+            super().run(token, *args, **kwargs)
+        except KeyboardInterrupt:
+            if logkeyinterupt:
+                logger.error("Received keyboard interrupt")
+                down_report("Received keyboard interrupt")
+            else:
+                logger.info("Bye!")
+        except Exception as e:
+            logger.error(f"Bot crashed: {e}", exc_info=True)
+            down_report(f"Bot crashed: {e}")
 
     async def on_ready(self):
         """On ready message"""
         logger.info(f"{self.user} is ready")
-            
-        # Sync application 
+
+        # Sync application
         if self.sync_commands:
             logger.info("Syncing application commands")
             await self.tree.sync()
@@ -141,22 +164,26 @@ class Bot(commands.Bot):
         else:
             logger.warning("Skipping application command sync")
 
-        
         # Set static status if provided
         if hasattr(self, "static_status"):
             await self.change_presence(activity=self.static_status())
         else:
             logger.info("No static status provided")
             
+        # Check file structure
+        logger.info("Checking file structure")
+        await self.check_file_structure()
+        logger.info("File structure checked")
+
     async def add_cog(self, cog, *args, **kwargs):
         """Adds a cog to the bot"""
         await super().add_cog(cog, *args, **kwargs)
         self.cog_cache[cog.__class__.__name__] = cog
-        
+
     async def add_cog_unloaded(self, cog, *args, **kwargs):
         """Adds a cog to the bot without loading it, to be manually loaded later"""
         self.cog_cache[cog.__class__.__name__] = cog
-        
+
     async def load_cog(self, cog_name):
         """Loads a cog that was previously added without loading"""
         if cog_name in self.cog_cache:
@@ -168,7 +195,8 @@ class Bot(commands.Bot):
         await self.add_cog(ImpersonateGuild(self, self.shell))
         await self.add_cog(ImpersonateDM(self, self.shell))
         await self.add_cog(DiscordExplorer(self))
-    
+        await self.add_cog(DownReportManager(self, self.shell))
+
     def dont_sync_commands(self):
         """Don't sync application commands"""
         self.sync_commands = False
@@ -176,5 +204,48 @@ class Bot(commands.Bot):
     def is_docker(self):
         """Check if the bot is running in a Docker container"""
 
-        cgroup = Path('/proc/self/cgroup')
-        return Path('/.dockerenv').is_file() or cgroup.is_file() and 'docker' in cgroup.read_text()
+        cgroup = Path("/proc/self/cgroup")
+        return (
+            Path("/.dockerenv").is_file()
+            or cgroup.is_file()
+            and "docker" in cgroup.read_text()
+        )
+
+    async def check_file_structure(self):
+        """Check the file structure of the bot"""
+
+        # File hierarchy
+        file_hierarchy = {
+            "store": {
+                "images": {},
+                "files": {},
+                "cache": {
+                    "downreport-webhook.json": '{ "new":true }',
+                },
+            },
+            "communal": {},
+        }
+
+        # Create directories/files (if not exists)
+        await self._file_structure_handle_dir("./", file_hierarchy) # Handle root directory
+    
+    async def _file_structure_handle_dir(self, path: str, payload: dict):
+        """Handle directory creation"""        
+        # Create directory
+        if not os.path.exists(path):
+            os.makedirs(path)
+            logger.info(f"Created directory: {path}")
+            
+        # Handle files/directories
+        for name, content in payload.items():
+            if isinstance(content, dict):
+                await self._file_structure_handle_dir(os.path.join(path, name), content)
+            elif isinstance(content, str):
+                # Write file
+                file_path = os.path.join(path, name)
+                if not os.path.exists(file_path):
+                    with open(file_path, "w") as f:
+                        f.write(content)
+                    logger.info(f"Created file: {file_path}")
+                else:
+                    logger.info(f"File already exists: {file_path}")
