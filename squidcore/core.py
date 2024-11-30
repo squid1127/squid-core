@@ -129,17 +129,17 @@ class Bot(commands.Bot):
         else:
             raise ValueError("No status provided")
 
-    def run(self, token:str=None, logkeyinterupt=False, *args, **kwargs):
+    def run(self, token: str = None, logkeyinterupt=False, *args, **kwargs):
         """
         Runs the bot and handle errors.
-        
+
         Args:
             token (str): The token for the Discord bot.
             logkeyinterupt (bool): Whether the bot will consider a keyboard interrupt as an error.
         """
         if not token:
             token = self.token
-        
+
         try:
             super().run(token, *args, **kwargs)
         except KeyboardInterrupt:
@@ -169,7 +169,7 @@ class Bot(commands.Bot):
             await self.change_presence(activity=self.static_status())
         else:
             logger.info("No static status provided")
-            
+
         # Check file structure
         logger.info("Checking file structure")
         await self.check_file_structure()
@@ -227,15 +227,17 @@ class Bot(commands.Bot):
         }
 
         # Create directories/files (if not exists)
-        await self._file_structure_handle_dir("./", file_hierarchy) # Handle root directory
-    
+        await self._file_structure_handle_dir(
+            "./", file_hierarchy
+        )  # Handle root directory
+
     async def _file_structure_handle_dir(self, path: str, payload: dict):
-        """Handle directory creation"""        
+        """Handle directory creation"""
         # Create directory
         if not os.path.exists(path):
             os.makedirs(path)
             logger.info(f"Created directory: {path}")
-            
+
         # Handle files/directories
         for name, content in payload.items():
             if isinstance(content, dict):
