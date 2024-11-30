@@ -29,14 +29,15 @@ bot = squidcore.Bot(token=bot_token, shell_channel=bot_shell, name='botScan')
 # Bot Config
 bot.dont_sync_commands()
 
-# Add a database (Required by discord explorer)
-postgres_pool = os.getenv("POSTGRES_POOL") if os.getenv("POSTGRES_POOL") else 20
-bot.add_db(os.getenv("POSTGRES_CONNECTION"), os.getenv("POSTGRES_PASSWORD"), int(postgres_pool))
+# Add a database (Optional)
+if os.getenv("SCAN_USE_DB"):
+    postgres_pool = os.getenv("POSTGRES_POOL") if os.getenv("POSTGRES_POOL") else 20
+    bot.add_db(os.getenv("POSTGRES_CONNECTION"), os.getenv("POSTGRES_PASSWORD"), int(postgres_pool))
 
 @bot.listen('on_ready')
 async def startup_message():
     await bot.shell.log(
-        "Bot ready. To explore servers, use `botscan explorer`. To sync with database, use `botscan db discord index-all`.",
+        "Bot ready. To explore servers, use `botscan xp`. To sync with database, use `botscan db discord index-all`.",
         title="BotScan",
         cog="Core",
         msg_type="info",
