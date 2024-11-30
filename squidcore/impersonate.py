@@ -221,7 +221,7 @@ class ImpersonateCore:
             else:
                 guild_id = thread.name.split(".")[-2]
                 channel_id = thread.name.split(".")[-1].split("//")[0]
-                logger.info("Outgoing message to: ", guild_id, " - ", channel_id)
+                logger.info("Outgoing message to: "+ guild_id+ " - "+ channel_id)
                 guild = self.bot.get_guild(int(guild_id))
                 channel = guild.get_channel(int(channel_id))
 
@@ -483,8 +483,8 @@ class ImpersonateGuild(commands.Cog):
 
     @commands.Cog.listener()
     async def on_message(self, message: discord.Message):
-        if message.author == self.bot.user:
-            return
+        # if message.author == self.bot.user:
+        #     return
 
         if message.guild is None:
             return
@@ -690,8 +690,6 @@ class ImpersonateDM(commands.Cog):
 
     @commands.Cog.listener()
     async def on_message(self, message: discord.Message):
-        if message.author == self.bot.user:
-            return
 
         if self.bot.is_ready() is False:
             self.logger.error("Could not process message: Bot is not ready.")
