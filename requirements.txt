@@ -4,3 +4,5 @@ coloredlogs
 watchdog
 pyyaml
 timedelta
+python-dotenv
+aiohttp
