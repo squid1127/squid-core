@@ -33,9 +33,18 @@ class DownReportManager(commands.Cog):
         self.report_channel = report_channel if report_channel else shell.channel_id
         self.webhook = None
         
-    async def initialize(self):
+        self.shell.add_command("downreport", cog="DownReportManager", description="Configure the down report manager")
+        
+    @commands.Cog.listener()
+    async def on_ready(self):
+        """Initialize the down report manager when the bot is ready."""
+        logger.info("Initializing down report manager")
+        await self.initialize()
+        logger.info("Down report manager initialized")
+        
+    async def initialize(self, force: bool = False):
         """Initialize everything needed to report down events."""
-        self.webhook = await self.get_webhook()
+        self.webhook = await self.get_webhook(force=force)
         if not self.webhook:
             logger.error("Failed to initialize down report manager | Missing webhook")
             return
@@ -46,22 +55,21 @@ class DownReportManager(commands.Cog):
         
         with open(path, "w") as f:
             json.dump(data, f)
-            
-    @commands.Cog.listener()
-    async def on_ready(self):
-        """Initialize the down report manager when the bot is ready."""
-        logger.info("Initializing down report manager")
-        await self.initialize()
-        logger.info("Down report manager initialized")
-        
 
-    async def get_webhook(self) -> discord.Webhook:
+
+    async def get_webhook(self, force: bool = False) -> discord.Webhook:
         """Automaticly fetch or create the webhook for the report channel."""
 
         # Get the channel
         channel = self.bot.get_channel(self.report_channel)
         if not channel:
             logger.error("Unable to fetch webhook: Channel not found")
+            await self.shell.log(
+                "Unable to fetch webhook: Channel not found",
+                title="Channel Not Found",
+                msg_type="error",
+                cog="DownReport",
+            )
             return None
 
         # Get the webhook
@@ -76,13 +84,27 @@ class DownReportManager(commands.Cog):
                 cog="DownReport",
             )
             return None
-
+        
         # Find the webhook
         webhook_name = f"{self.bot.user.name} | Bot Error Report"
         for webhook in webhooks:
             if webhook.name == webhook_name:
-                return webhook
-            
+                if force:
+                    try:
+                        await webhook.delete(reason="Forced webhook recreation for downreport")
+                    except discord.Forbidden:
+                        logger.error("Missing permissions to delete webhooks")
+                        await self.shell.log(
+                            "'Manage Webhooks' permission is required for downreport to function.",
+                            title="Permissions Error",
+                            msg_type="error",
+                            cog="DownReport",
+                        )
+                        return None
+                    break
+                else:
+                    return webhook
+        
         # Create the webhook
         try:
             webhook = await channel.create_webhook(name=webhook_name, reason="Error reporting webhook")
@@ -95,6 +117,38 @@ class DownReportManager(commands.Cog):
                 cog="DownReport",
             )
             return None
+        
+        return webhook
+        
+    #* Shell Stuff
+    async def cog_status(self):
+        """Return the status of the down report cog."""
+        if not self.webhook:
+            return "Error: Missing webhook"
+        
+        return "Ready"
+
+    async def shell_callback(self, command: ShellCommand):
+        """Handle shell commands for the down report manager."""
+        if command.name == "downreport":
+            if command.query.startswith("get"):
+                await command.log(f"Webhook URL: {self.webhook.url}", title="Webhook URL")
+            elif command.query.startswith("set"):
+                await command.log("Setting the webhook is not supported", title="Error", msg_type="error")
+            elif command.query.startswith("new"):
+                message = await command.log("Creating a new webhook...", title="New Webhook")
+                await self.initialize(force=True)
+                if self.webhook:
+                    await command.log(f"New webhook created: {self.webhook.url}", title="New Webhook", msg_type="success", edit=message)
+                else:
+                    await command.log("Failed to create a new webhook", title="New Webhook", msg_type="error", edit=message)
+            else:
+                await command.log(
+                    "Usage: downreport [get|set|new]",
+                    title="downreport: Usage",
+                )
+                
+                
         
 def down_report(message: str):
     """Report a down event to the shell channel. (No async)"""
@@ -126,11 +180,12 @@ def down_report(message: str):
     # Send the message
     asyncio.run(_down_report_send_embed(url, embed))
     
+        
+    
     
 async def _down_report_send_embed(url: str, embed: discord.Embed):
     # Send the message
     async with aiohttp.ClientSession() as session:
         webhook = discord.Webhook.from_url(url, session=session)
         await webhook.send(embed=embed)
-
-    
+        
