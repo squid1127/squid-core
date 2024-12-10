@@ -10,6 +10,9 @@ import asyncio
 import os
 from pathlib import Path
 
+# Simple Hashing
+import hashlib
+
 # * Internal Packages & Imports
 from .shell import ShellCore, ShellHandler, ShellCommand  # Shell
 from .db import *  # Database
@@ -251,3 +254,7 @@ class Bot(commands.Bot):
                     logger.info(f"Created file: {file_path}")
                 else:
                     logger.info(f"File already exists: {file_path}")
+
+    def hash_config(self, config: dict) -> str:
+        """Hash the config for caching"""
+        return hashlib.md5(str(config).encode()).hexdigest()
