@@ -1,10 +1,11 @@
-"""Module for handling file operations, including reading and writing files."""
+"""Submodule for handling configuration files and handle path assignments."""
+
+# General file handling
+import os
+import time
 
 # For processing specific file types
 import json, yaml
-
-# Test code
-import random
 
 # Discord
 from discord.ext import commands
@@ -15,148 +16,291 @@ from watchdog.events import FileSystemEventHandler
 import time
 from functools import wraps
 
-class TextFile:
-    """
-    A class to handle text files with support for different file types and file change monitoring.
-    Attributes:
-        SUPPORTED_TYPES (list): A list of supported file types.
-    Methods:
-        __init__(path: str, file_type: str = None, exists: bool = False):
-            Initializes the TextFile object with the given path and file type.
-        on_edit(func):
-            Decorator for watching file changes.
-        read(stringify: bool = False):
-            Reads the file and returns the data.
-        write(data):
-            Writes the data to the file.
-        append(data):
-            Appends the data to the file.
-        __str__() -> str:
-            Returns the string representation of the file content.
-        __repr__() -> str:
-            Returns the string representation of the TextFile object.
-        __call__(*args, **kwargs):
-            Calls the read method and returns the file content.
-    """
-    
-    def __init__(self, path: str, file_type: str = None, exists: bool = False):
-        self.path = path
+# Logger
+import logging
 
-        self.file_type = (file_type if file_type else path.split(".")[-1]).upper()
-        if self.file_type not in self.SUPPORTED_TYPES:
-            raise ValueError(f"Unsupported file type: {self.file_type}")
+logger = logging.getLogger("core.files")
 
-        if not exists:
-            # Check if the file exists
-            try:
-                with open(self.path, "r") as f:
-                    pass
-            except FileNotFoundError:
-                with open(self.path, "w") as f:
-                    pass
 
-    SUPPORTED_TYPES = ["TXT", "JSON", "YAML", "YML"]
-    
+class FileBroker:
+    """Class for handling configuration files and path assignments."""
 
-    @classmethod
-    def on_edit(cls, func):
-        """Decorator for watching file changes. This funciton is currently broken."""
-        @wraps(func)
-        def wrapper(self, *args, **kwargs):
-            class ChangeHandler(FileSystemEventHandler):
-                def __init__(self, path):
-                    self.path = path
-                def on_modified(self, event):
-                    if event.src_path == self.path:
-                        func(self, *args, **kwargs)
+    def __init__(self, bot: commands.Bot, root_path: str):
+        self.bot = bot
+        self.root_path = root_path
+        self.cogs = {}
 
-            event_handler = ChangeHandler(self.path)
-            observer = Observer()
-            observer.schedule(event_handler, path=self.path, recursive=False)
-            observer.start()
+    def init(self):
+        # Create the root directory
+        try:
+            os.makedirs(self.root_path, exist_ok=True)
+            os.makedirs(os.path.join(self.root_path, "config"), exist_ok=True)
+            os.makedirs(os.path.join(self.root_path, "cache"), exist_ok=True)
+            os.makedirs(os.path.join(self.root_path, "data"), exist_ok=True)
+        except OSError as e:
+            logger.error(f"Error creating directories: {e}")
+            return None
 
-            try:
-                while True:
-                    time.sleep(1)
-            except KeyboardInterrupt:
-                observer.stop()
-            observer.join()
+        return True
 
-        return wrapper
-    
-    def read(self, stringify: bool = False):
-        """Reads the file and returns the data."""
-        with open(self.path, "r") as f:
-            if self.file_type == "TXT" or stringify:
-                return f.read()
-            elif self.file_type == "JSON":
-                return json.load(f)
-            elif self.file_type in ["YAML", "YML"]:
-                return yaml.safe_load(f)
+    def configure_cog(
+        self,
+        cog: str,
+        config_file: bool = False,
+        config_default: str = None,
+        config_dir: bool = False,
+        config_do_cache: int = 0,
+        cache: bool = False,
+        cache_clear_on_init: bool = False,
+        perm: bool = False,
+    ):
+        """
+        Configure a cog with the given settings.
+        Args:
+            cog (str): The name of the cog to configure.
+            config_file (bool, optional): Indicates whether the cog needs a configuration file. Defaults to False.
+            config_default (str, optional): The default configuration for the cog. Defaults to None.
+            config_do_cache (int, optional): The number of seconds to cache the configuration file to prevent excessive reads. Defaults to 0 (no caching).
+            config_dir (bool, optional): Indicates whether the cog needs a configuration directory. Defaults to False.
+            cache (bool, optional): Indicates whether the cog needs a cache directory. Defaults to False.
+            cache_clear_on_init (bool, optional): Indicates whether the cache should be cleared on initialization. Defaults to False.
+            perm (bool, optional): Indicates whether the cog needs a permanent data directory. Defaults to False.
+        """
 
-    def write(self, data):
-        """Writes the data to the file."""
-        with open(self.path, "w") as f:
-            if self.file_type == "TXT":
-                f.write(data)
-            elif self.file_type == "JSON":
-                json.dump(data, f, indent=4)
-            elif self.file_type in ["YAML", "YML"]:
-                yaml.dump(data, f, default_flow_style=False)
+        # Set the cog settings
+        config = {
+            "config": config_file,
+            "config_default": config_default,
+            "config_dir": config_dir,
+            "config_cache_enabled": config_do_cache > 0,
+            "config_cache_set_time": config_do_cache,
+            "cache": cache,
+            "cache_clear_on_init": cache_clear_on_init,
+            "perm": perm,
+        }
 
-    def append(self, data):
-        """Appends the data to the file."""
-        with open(self.path, "a") as f:
-            if self.file_type == "TXT":
-                f.write(data)
-            elif self.file_type == "JSON":
-                json.dump(data, f, indent=4)
-            elif self.file_type in ["YAML", "YML"]:
-                f.write("\n")
-                yaml.dump(data, f, default_flow_style=False)
+        # Create class
+        cogfile = CogFiles(
+            bot=self.bot, cog=cog, config=config, root_path=self.root_path
+        )
+        self.cogs[cog] = cogfile
+
+        return cogfile
+
+
+class CogFiles:
+    """Per cog class to handle configuration files and path assignments."""
+
+    def __init__(self, bot: commands.Bot, cog: str, config: dict, root_path: str):
+        self.bot = bot
+        self.cog = cog
+        self.config = config
+        self.root_path = root_path
+
+        self.configs = {}
+
+    def init(self):
+        """
+        Initialize the cog directories and files.
+        """
+
+        try:
+            # Create the config directory
+            if self.config["config_dir"]:
+                config_dir = os.path.join(self.root_path, "config", self.cog)
+                os.makedirs(config_dir, exist_ok=True)
+            else:
+                config_dir = None
+
+            # Create the config file
+            if self.config["config"]:
+                config_file = (
+                    os.path.join(self.root_path, "config", f"{self.cog}.yaml")
+                    if not self.config["config_dir"]
+                    else os.path.join(config_dir, f"configuration.yaml")
+                )
+                if not os.path.exists(config_file):
+                    # Confirm default configuration is valid yaml
+                    if not self.config["config_default"]:
+                        logger.warning(
+                            f"No default configuration provided for cog {self.cog}"
+                        )
+                        self.config["config_default"] = ""
+                        with open(config_file, "w") as f:
+                            f.write("")
+                    else:
+                        try:
+                            yaml.safe_load(self.config["config_default"])
+                        except yaml.YAMLError as e:
+                            logger.warning(
+                                f"Invalid default configuration for cog {self.cog}: {e} - Using empty configuration"
+                            )
+                            self.config["config_default"] = ""
+                        with open(config_file, "w") as f:
+                            f.write(self.config["config_default"])
+            else:
+                config_file = None
+
+            # Create the cache directory
+            if self.config["cache"]:
+                cache_dir = os.path.join(self.root_path, "cache", self.cog)
+                os.makedirs(cache_dir, exist_ok=True)
                 
-    def __str__(self) -> str:
-        return self.read(stringify=True)
-    
-    def __repr__(self) -> str:
-        return f"<TextFile path={self.path}>"
-    
-    def __call__(self, *args, **kwargs):
-        return self.read(*args, **kwargs)
+                # Clear cache on init
+                if self.config["cache_clear_on_init"]:
+                    for filename in os.listdir(cache_dir):
+                        file_path = os.path.join(cache_dir, filename)
+                        try:
+                            if os.path.isfile(file_path):
+                                os.unlink(file_path)
+                        except Exception as e:
+                            logger.error(f"Error clearing cache file {file_path}: {e}")
+            else:
+                cache_dir = None
 
+            # Create the perm directory
+            if self.config["perm"]:
+                perm_dir = os.path.join(self.root_path, "data", self.cog)
+                os.makedirs(perm_dir, exist_ok=True)
+            else:
+                perm_dir = None
 
-# class TestClass(TextFile):
-#     def __init__(self):
-#         super().__init__("store/test.yaml", file_type="YAML")
-#         self.file_type = "YAML"
-        
-#     def add_random(self):
-#         # Create a random dictionary
-#         add = {random.randint(0, 100): random.randint(0, 100) for _ in range(100)}
-        
-#         # Merge with the existing data
-#         try:
-#             data = self.read()
-#             data.update(add)
-#         except AttributeError:
-#             data = add
-        
-#         # Write the data back
-#         self.write(data)
+        except OSError as e:
+            logger.error(f"Error creating directories for cog {self.cog}: {e}")
+            return None
+
+        return {
+            "config": config_file,
+            "config_dir": config_dir,
+            "cache": cache_dir,
+            "perm": perm_dir,
+        }
+
+    def get_config(self, name: str = None, cache: bool = True):
+        """
+        Get the configuration for the cog.
+        Args:
+            name (str, optional): The name of the configuration file to read. By default, the default configuration file is read.
+            cache (bool, optional): Use the cached configuration if available. Defaults to True.
+        """
+
+        if name:
+            # Check that config directory is enabled
+            if not self.config["config_dir"]:
+                logger.warning(
+                    f"Configuration directory is disabled for cog {self.cog} but a specific configuration file was requested"
+                )
+                return None
+
+        # Check if the configuration is cached
+        if cache and self.config["config_cache_enabled"]:
+            # Find current cached configuration information
+            config_info = self.configs.get(name if name else "__default__", {})
+            last_read = config_info.get("last_read", 0)
+            cached_config = config_info.get("config", None)
+
+            # Check if the configuration is still valid
+            if last_read:
+                if time.time() - last_read < self.config["config_cache_set_time"]:
+                    return cached_config
+
+        # Read the configuration
+        logger.debug(f"Reading configuration for cog {self.cog}")
+
+        if self.config["config"]:
+            # Determine path
+            config_file = (
+                os.path.join(self.root_path, "config", f"{self.cog}.yaml")
+                if not name
+                else os.path.join(self.config["config_dir"], f"{name}.yaml")
+            )
             
-#     @TextFile.on_edit
-#     def on_edit(self):
-#         print("File edited,", random.randint(0, 100))
-#         self.add_random()
+            logger.debug(f"Reading configuration file: {config_file}")
+            
+            with open(config_file, "r") as f:
+                try:
+                    config = yaml.safe_load(f)
+                except yaml.YAMLError as e:
+                    logger.error(f"Error loading configuration for cog {self.cog}: {e}")
+                    return None
+        else:
+            logger.warning(
+                f"A configuration file was configured for cog {self.cog} but config is disabled"
+            )
+            return None
+
+        # Cache the configuration
+        if cache and self.config["config_cache_enabled"]:
+            self.configs[name if name else "__default__"] = {
+                "last_read": time.time(),
+                "config": config,
+            }
+
+        return config
+    
+    def set_config(self, config: dict, name: str = None):
+        """
+        (Not Recommended) Set the configuration for the cog.
+        Args:
+            config (dict): The configuration to set.
+            name (str, optional): The name of the configuration file to set. By default, the default configuration file is set.
+        """
+        # Determine path
+        config_file = (
+            os.path.join(self.root_path, "config", f"{self.cog}.yaml")
+            if not name
+            else os.path.join(self.config["config_dir"], f"{name}.yaml")
+        )
         
-#     def run(self):
-#         self.add_random()
-#         print(self.read())
-        
-#         self.on_edit()
-        
-#         while True:
-#             pass
-        
-# if __name__ == "__main__":
-#     TestClass().run()
+        with open(config_file, "w") as f:
+            yaml.dump(config, f)
+
+    def invalidate_config(self, name: str = None):
+        """
+        Invalidate the cached configuration for the cog.
+        Args:
+            name (str, optional): The name of the configuration file to invalidate. By default, the default configuration file is invalidated.
+        """
+        if name:
+            self.configs.pop(name, None)
+        else:
+            self.configs.pop("__default__", None)
+
+    def get_config_dir(self):
+        """
+        Get the configuration directory for the cog.
+        """
+
+        if not self.config["config_dir"]:
+            logger.warning(
+                f"Configuration directory is disabled for cog {self.cog} but a specific configuration directory was requested"
+            )
+            return None
+
+        return os.path.join(self.root_path, "config", self.cog)
+    
+    def get_cache_dir(self):
+        """
+        Get the cache directory for the cog.
+        """
+
+        if not self.config["cache"]:
+            logger.warning(
+                f"Cache directory is disabled for cog {self.cog} but a cache directory was requested"
+            )
+            return None
+
+        return os.path.join(self.root_path, "cache", self.cog)
+    
+    def get_perm_dir(self):
+        """
+        Get the permanent data directory for the cog.
+        """
+
+        if not self.config["perm"]:
+            logger.warning(
+                f"Permanent data directory is disabled for cog {self.cog} but a permanent data directory was requested"
+            )
+            return None
+
+        return os.path.join(self.root_path, "data", self.cog)

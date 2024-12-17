@@ -44,6 +44,8 @@ class Bot(commands.Bot):
         token (str): The token for the Discord bot.
         name (str): The name of the Discord bot.
         shell_channel (int): The ID of the shell channel.
+        data_path (str, optional): The path to the data directory. Defaults to "./store".
+        
     """
 
     def __init__(
@@ -51,6 +53,7 @@ class Bot(commands.Bot):
         token: str,
         name: str,
         shell_channel: int,
+        data_path: str = "./store",
     ):
         self.token = token
         self.name = name
@@ -64,6 +67,10 @@ class Bot(commands.Bot):
 
         # Shell
         self.shell = ShellCore(self, self.shell_channel, self.name)
+        
+        # File management
+        self.filebroker = FileBroker(self, data_path)
+        self.filebroker.init()
 
         super().__init__(
             command_prefix=f"{self.name.lower()}:",
@@ -215,7 +222,7 @@ class Bot(commands.Bot):
         )
 
     async def check_file_structure(self):
-        """Check the file structure of the bot"""
+        """DEPRECATED: Check file structure"""
 
         # File hierarchy
         file_hierarchy = {
@@ -235,7 +242,7 @@ class Bot(commands.Bot):
         )  # Handle root directory
 
     async def _file_structure_handle_dir(self, path: str, payload: dict):
-        """Handle directory creation"""
+        """DEPRECATED: Handle file structure"""
         # Create directory
         if not os.path.exists(path):
             os.makedirs(path)

@@ -1,5 +1,8 @@
 """Automatic system for reporting when the bot disconnects or crashes."""
 
+# Files
+from .files import FileBroker, CogFiles
+
 # Discord
 import discord
 from discord.ext import commands, tasks
@@ -34,6 +37,12 @@ class DownReportManager(commands.Cog):
         self.webhook = None
         
         self.shell.add_command("downreport", cog="DownReportManager", description="Configure the down report manager")
+        broker: FileBroker = self.bot.filebroker
+        self.files = broker.configure_cog(
+            "DownReportManager",
+            cache=True,
+        )
+        self.files.init()
         
     @commands.Cog.listener()
     async def on_ready(self):
@@ -50,7 +59,7 @@ class DownReportManager(commands.Cog):
             return
         
         # Save the webhook url
-        path = "store/cache/downreport-webhook.json"
+        path = os.path.join(self.files.get_cache_dir(), "downreport-webhook.json")
         data = {"url": self.webhook.url}
         
         with open(path, "w") as f:
@@ -154,7 +163,7 @@ def down_report(message: str):
     """Report a down event to the shell channel. (No async)"""
     
     # Read the webhook url
-    path = "store/cache/downreport-webhook.json"
+    path = "store/cache/DownReportManager/downreport-webhook.json"
     if not os.path.exists(path):
         logger.error("Missing webhook url")
         return
@@ -188,4 +197,3 @@ async def _down_report_send_embed(url: str, embed: discord.Embed):
     async with aiohttp.ClientSession() as session:
         webhook = discord.Webhook.from_url(url, session=session)
         await webhook.send(embed=embed)
-        
