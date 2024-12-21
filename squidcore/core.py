@@ -180,11 +180,6 @@ class Bot(commands.Bot):
         else:
             logger.info("No static status provided")
 
-        # Check file structure
-        logger.info("Checking file structure")
-        await self.check_file_structure()
-        logger.info("File structure checked")
-
     async def add_cog(self, cog, *args, **kwargs):
         """Adds a cog to the bot"""
         await super().add_cog(cog, *args, **kwargs)
@@ -220,47 +215,6 @@ class Bot(commands.Bot):
             or cgroup.is_file()
             and "docker" in cgroup.read_text()
         )
-
-    async def check_file_structure(self):
-        """DEPRECATED: Check file structure"""
-
-        # File hierarchy
-        file_hierarchy = {
-            "store": {
-                "images": {},
-                "files": {},
-                "cache": {
-                    "downreport-webhook.json": '{ "new":true }',
-                },
-            },
-            "communal": {},
-        }
-
-        # Create directories/files (if not exists)
-        await self._file_structure_handle_dir(
-            "./", file_hierarchy
-        )  # Handle root directory
-
-    async def _file_structure_handle_dir(self, path: str, payload: dict):
-        """DEPRECATED: Handle file structure"""
-        # Create directory
-        if not os.path.exists(path):
-            os.makedirs(path)
-            logger.info(f"Created directory: {path}")
-
-        # Handle files/directories
-        for name, content in payload.items():
-            if isinstance(content, dict):
-                await self._file_structure_handle_dir(os.path.join(path, name), content)
-            elif isinstance(content, str):
-                # Write file
-                file_path = os.path.join(path, name)
-                if not os.path.exists(file_path):
-                    with open(file_path, "w") as f:
-                        f.write(content)
-                    logger.info(f"Created file: {file_path}")
-                else:
-                    logger.info(f"File already exists: {file_path}")
 
     def hash_config(self, config: dict) -> str:
         """Hash the config for caching"""
