@@ -85,6 +85,7 @@ class ShellCore:
         msg_type: str = "info",
         cog: str = None,
         preset: str = None,
+        fields: list = None,
     ):
         if preset:
             title = self.presets[preset]["title"]
@@ -110,6 +111,15 @@ class ShellCore:
         )
         embed.set_author(name=cog)
         embed.set_footer(text=f"Powered by {self.name.title()} Bot")
+        
+        if fields:
+            for field in fields:
+                embed.add_field(
+                    name=field["name"],
+                    value=field["value"],
+                    inline=field.get("inline", False),
+                )
+        
         return embed
 
     # Send a log message
@@ -122,6 +132,7 @@ class ShellCore:
         plain_text: str = None,
         preset: str = None,
         edit: discord.Message = None,
+        fields: list = None,
     ):
         """
         Logs a message to a Discord channel with an optional embed.
@@ -141,6 +152,8 @@ class ShellCore:
             Preset configuration for the embed.
         edit : discord.Message, optional
             A Discord message object to edit instead of sending a new message.
+        fields : list, optional
+            A list of dictionaries representing fields to add to the embed.
         Returns:
         --------
         discord.Message
@@ -152,6 +165,7 @@ class ShellCore:
             msg_type=msg_type,
             cog=cog,
             preset=preset,
+            fields=fields,
         )
 
         if edit:
