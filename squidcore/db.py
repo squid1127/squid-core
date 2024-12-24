@@ -102,25 +102,28 @@ class DatabaseTable:
 
     # * Core Functions | Basic Queries
 
-    async def fetch(self, filters: dict = None):
+    async def fetch(self, filters: dict = None, limit: int = None, order: str = None):
         """Fetch data from the table"""
+        query = f"SELECT * FROM {self.schema}.{self}"
         if filters:
             # Convert filter dictionary to SQL string (with placeholders)
             filter_string = " AND ".join(
                 [f"{key} = '{value}'" for key, value in filters.items()]
             )
 
-            # Execute query
-            result = await self.schema.db.core.query(
-                f"SELECT * FROM {self.schema}.{self} WHERE {filter_string}"
-            )
-
-            # Convert to list of dictionaries
-            data = self.schema.db.core.table_to_list_dict(result)
-            return data
+            # Append filter to query
+            query += f" WHERE {filter_string}"
+            
+        if limit:
+            query += f" LIMIT {limit}"
+            
+        if order:
+            query += f" ORDER BY {order}"
 
         # Fetch all data
-        result = await self.schema.db.core.query(f"SELECT * FROM {self.schema}.{self}")
+        result = await self.schema.db.core.query(query)
+        
+        # Convert to list of dictionaries and return
         data = self.schema.db.core.table_to_list_dict(result)
         return data
 
