@@ -113,12 +113,14 @@ class DatabaseTable:
 
             # Append filter to query
             query += f" WHERE {filter_string}"
+
+        if order:
+            query += f" ORDER BY {order}"
+            
             
         if limit:
             query += f" LIMIT {limit}"
             
-        if order:
-            query += f" ORDER BY {order}"
 
         # Fetch all data
         result = await self.schema.db.core.query(query)
