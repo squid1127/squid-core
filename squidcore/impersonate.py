@@ -305,7 +305,10 @@ class ImpersonateCore:
                 await message.add_reaction("❌")
 
             else:
-                await message.delete()
+                if dm:
+                    await message.add_reaction("✅")
+                else:
+                    await message.delete()
                 # await message.add_reaction("✅")
 
     async def get_thread(
@@ -723,6 +726,9 @@ class ImpersonateDM(commands.Cog):
                 await self.core.handle(message=message, incoming=False, dm=True)
 
         if not isinstance(message.channel, discord.DMChannel):
+            return
+        
+        if message.author == self.bot.user:
             return
 
         name = f"&&dm.{message.author.id}"
