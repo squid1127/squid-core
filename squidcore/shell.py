@@ -380,6 +380,7 @@ class ShellCommand:
         msg_type: str = "info",
         preset: str = None,
         edit: discord.Message = None,
+        view: discord.ui.View = None,
     ):
         """
         Logs a message by creating and sending an embed to the specified channel.
@@ -407,9 +408,9 @@ class ShellCommand:
         if footer:
             embed.set_footer(text=footer)
         if edit:
-            msg_object = await edit.edit(embed=embed)
+            msg_object = await edit.edit(embed=embed, view=view)
         else:
-            msg_object = await self.channel.send(embed=embed)
+            msg_object = await self.channel.send(embed=embed, view=view)
         return msg_object
 
     async def raw(self, message: str, edit: discord.Message = None, **kwargs):
