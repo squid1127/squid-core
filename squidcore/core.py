@@ -21,6 +21,7 @@ from .files import *  # File management
 from .impersonate import *  # Impersonation (Talking as the bot and dm handling)
 from .explorer import *  # Discord Explorer
 from .downreport import *  # Downreport
+from .uptime import *  # Uptime
 
 # Logs
 import logging
@@ -201,6 +202,7 @@ class Bot(commands.Bot):
         await self.add_cog(ImpersonateDM(self, self.shell))
         await self.add_cog(DiscordExplorer(self))
         await self.add_cog(DownReportManager(self, self.shell))
+        await self.add_cog(UptimeManager(self, self.shell))
 
     def dont_sync_commands(self):
         """Don't sync application commands"""
