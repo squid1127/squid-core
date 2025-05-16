@@ -77,8 +77,6 @@ class UptimeManager(commands.Cog):
             logger.info("Uptime Manager is ready.")
             self.push_uptime_task.start()
             logger.info(f"Uptime check task started with interval: {self.interval} seconds")
-        else:
-            logger.warning("Uptime Manager is disabled. Not starting the task.")
 
     async def push_uptime(self):
         """Push uptime status to the configured URL."""    
