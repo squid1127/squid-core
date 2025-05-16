@@ -88,18 +88,16 @@ class Bot(commands.Bot):
 
     def add_db(
         self,
-        postgres_connection: str,
-        postgres_password: str = None,
-        postgres_pool: int = 20,
+        **kwargs,
     ):
         """
         Adds a database to the core system and initializes the database handler.
         This method sets up a database connection using the provided PostgreSQL connection string
         and attempts to add a database handler cog to the core system.
         Args:
-            postgres_connection (str): The connection string for the PostgreSQL database.
-            postgres_password (str, optional): The password for the PostgreSQL database. Defaults to None (Specified in the connection string).
-            postgres_pool (int, optional): The maximum number of connections to the PostgreSQL database. Defaults to 20.
+            **kwargs: Keyword arguments for the database connection.
+                - from_env (bool): If True, loads the database connection from environment variables.
+                - dsn (str): The PostgreSQL connection string.
         Raises:
             Exception: If adding the database handler fails.
         """
@@ -108,10 +106,8 @@ class Bot(commands.Bot):
         self.db = DatabaseCore(
             self,
             shell=self.shell,
-            postgres_connection=postgres_connection,
-            postgres_password=postgres_password,
-            postgres_pool=postgres_pool,
         )
+        self.db.set_args(**kwargs)
 
         # Add the database handler
         try:

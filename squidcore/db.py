@@ -18,6 +18,10 @@ from typing import Literal
 import time
 import datetime
 
+# For extracting credentials from environment variables
+from dotenv import load_dotenv
+import os
+
 # For testing; random string
 import random
 
@@ -28,6 +32,7 @@ import json
 import logging
 
 logger = logging.getLogger("core.db")
+
 
 class DatabaseItem:
     """Represents an item in a database table, useful for fetching and modifying data"""
@@ -116,15 +121,13 @@ class DatabaseTable:
 
         if order:
             query += f" ORDER BY {order}"
-            
-            
+
         if limit:
             query += f" LIMIT {limit}"
-            
 
         # Fetch all data
         result = await self.schema.db.core.query(query)
-        
+
         # Convert to list of dictionaries and return
         data = self.schema.db.core.table_to_list_dict(result)
         return data
@@ -201,10 +204,9 @@ class DatabaseTable:
         logger.debug(f"Indexing -> {self.schema} -> {self.name}")
         await self.get_columns()
         for column in self.columns:
-                logger.debug(
-                    f"Indexing -> {self.schema} -> {self.name} -> {column.get('column_name')}"
-                )
-            
+            logger.debug(
+                f"Indexing -> {self.schema} -> {self.name} -> {column.get('column_name')}"
+            )
 
         return self
 
@@ -273,9 +275,7 @@ class DatabaseTableV1:
             The data for the database schema and name, either fetched or cached.
         """
 
-        logger.info(
-            f"Data requested for {self.schema} -> {self.name} ({self.random})"
-        )
+        logger.info(f"Data requested for {self.schema} -> {self.name} ({self.random})")
         logger.info(f"Last fetch: {self.last_fetch}")
         if self.last_fetch == None or self.do_periodic_fetch == False:
             logger.info(f"Fetching all data for {self.schema} -> {self.name}")
@@ -301,9 +301,7 @@ class DatabaseTableV1:
         self.data = self._cache_all  # Data variable for some reason
 
         self.last_fetch = time.time()
-        logger.info(
-            f"Data fetched for {self.schema} -> {self.name} ({self.random})"
-        )
+        logger.info(f"Data fetched for {self.schema} -> {self.name} ({self.random})")
 
         return self._cache_all
 
@@ -325,9 +323,9 @@ class DatabaseTableV1:
         logger.debug(f"Indexing -> {self.schema} -> {self.name}")
         await self.get_columns()
         for column in self.columns:
-                logger.debug(
-                    f"Indexing -> {self.schema} -> {self.name} -> {column.get('column_name')}"
-                )
+            logger.debug(
+                f"Indexing -> {self.schema} -> {self.name} -> {column.get('column_name')}"
+            )
         return self
 
     async def insert(self, data: dict):
@@ -539,33 +537,25 @@ class DatabaseObject:
 
 class DatabaseCore:
     """
-    Core database handler for the bot, including database connection and data management.
-    
+    Core database handler for the bot, including database connection and data management. Use set_args() to set the connection arguments.
+
     Args:
         bot (Bot): The bot object.
         shell (ShellCore): The shell object.
-        postgres_connection (str): The connection string for the PostgreSQL database.
-        postgres_password (str, optional): The password for the PostgreSQL database. (Optional if specified in the connection string)
-        postgres_pool (int, optional): The maximum number of connections to the PostgreSQL database. Defaults to 20.
     """
 
     def __init__(
         self,
         bot: commands.Bot,
         shell: ShellCore,
-        postgres_connection: str,
-        postgres_password: str = None,
-        postgres_pool: int = 20,
     ):
         self.bot = bot
         self.shell = shell
-        self.postgres_connection = postgres_connection
-        self.postgres_password = postgres_password
-        self.postgres_max_pool = postgres_pool
         self.pool = None
         self.working = False
         self.indexed = False
-        
+        self.connection_args = {}
+
         ignore = [
             "pg_toast",
             "pg_catalog",
@@ -577,9 +567,73 @@ class DatabaseCore:
 
         self.data = DatabaseObject(self, ignore_schema=ignore)
         self.discord = DiscordData(self)
-    
-
         
+    # Environment Variables and thier corresponding keys
+    ENV_VAR_MAP = {
+    "POSTGRES_DSN": "dsn",
+    "POSTGRES_HOST": "host",
+    "POSTGRES_PORT": "port",
+    "POSTGRES_DB": "database",
+    "POSTGRES_USER": "user",
+    "POSTGRES_PASSWORD": "password",
+    # Optional pool tuning
+    "POSTGRES_POOL_MIN_SIZE": "min_size",
+    "POSTGRES_POOL_MAX_SIZE": "max_size",
+    "POSTGRES_POOL_MAX_QUERIES": "max_queries",
+    "POSTGRES_POOL_MAX_INACTIVE_CONNECTION_LIFETIME": "max_inactive_connection_lifetime",
+    "POSTGRES_POOL_TIMEOUT": "timeout",
+    "POSTGRES_COMMAND_TIMEOUT": "command_timeout",
+}
+
+
+    def set_args(self, from_env: bool = False, **kwargs):
+        """
+        Set the arguments for the database connection.
+        Args:
+            from_env (bool): If True, use environment variables to set the connection arguments.
+            **kwargs: The arguments to be set.
+        """
+        keys_found = -1
+        
+        # environment variables
+        if from_env:
+            keys_found = 0
+            for key, value in self.ENV_VAR_MAP.items():
+                env_value = os.getenv(key)
+                if env_value:
+                    keys_found += 1
+                    self.connection_args[value] = env_value
+            if keys_found == 0:
+                logger.warning("No environment variables found for database connection")
+            else:
+                logger.info(f"Found {keys_found} environment variables for database connection")
+        
+        # kwargs
+        if kwargs:
+            keys_found = 0
+            for key, value in kwargs.items():
+                if key in self.ENV_VAR_MAP.values():
+                    self.connection_args[key] = value
+                    keys_found += 1
+                else:
+                    logger.warning(f"Unknown argument {key} for database connection")
+            if keys_found == 0:
+                logger.debug("No arguments found for database connection")
+            else:
+                logger.info(f"Found {keys_found} arguments for database connection")
+
+        if keys_found > 0:
+            logger.info(f"Connection arguments set: {self.connection_args}")
+        elif keys_found == 0:
+            logger.warning("No connection arguments found")
+        else:
+            logger.error("No connection arguments specified")
+            
+        # Defaults
+        if not "max_size" in self.connection_args:
+            self.connection_args["max_size"] = 20
+        
+        return self.connection_args
 
     async def start(self) -> bool:
         """
@@ -590,12 +644,23 @@ class DatabaseCore:
         Returns:
             bool: True if the database connection is successful and the connection pool is created, False otherwise.
         """
+        # Check if the connection arguments are set
+        if (not self.connection_args) or (self.connection_args == {}):
+            logger.error("No connection arguments set")
+            await self.shell.log(
+                "No connection arguments set",
+                title="Database Connection Error",
+                msg_type="error",
+                cog="DatabaseHandler",
+            )
+            return False
+
         # Continuously attempt to connect to the database
         while True:
             # Attempt to create the connection pool
             reason_failed = "Who knows"
             try:
-                await self.create_pool()
+                await self.create_pool(self.connection_args)
             except asyncpg.exceptions.InvalidPasswordError:
                 logger.error("Invalid password")
                 reason_failed = "Invalid password"
@@ -647,9 +712,7 @@ class DatabaseCore:
                 msg_type="error",
                 cog="DatabaseHandler",
             )
-            logger.error(
-                "Failed to connect to database, retrying in 10 seconds"
-            )
+            logger.error("Failed to connect to database, retrying in 10 seconds")
             await asyncio.sleep(10)
 
     async def post_start(self):
@@ -662,15 +725,11 @@ class DatabaseCore:
 
     # * Database Queries & Functions
     # Create connection pool
-    async def create_pool(self):
+    async def create_pool(self, connection_args: dict = {}):
         """
         Creates a connection pool for the database.
         """
-        self.pool = await asyncpg.create_pool(
-            dsn=self.postgres_connection,
-            password=self.postgres_password,
-            max_size=self.postgres_max_pool,
-        )
+        self.pool = await asyncpg.create_pool(**connection_args)
 
     # Basic query function
     async def query(self, query: str, *args):
@@ -927,9 +986,7 @@ class DiscordData:
             try:
                 await self.db.execute(self.POSTGRES)
             except Exception as e:
-                logger.error(
-                    f"Error setting up server data tables: {e}"
-                )
+                logger.error(f"Error setting up server data tables: {e}")
                 return e
             return True
         else:
