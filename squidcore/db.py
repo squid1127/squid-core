@@ -107,8 +107,17 @@ class DatabaseTable:
 
     # * Core Functions | Basic Queries
 
-    async def fetch(self, filters: dict = None, limit: int = None, order: str = None):
-        """Fetch data from the table"""
+    async def fetch(self, filters: dict = None, limit: int = None, order: str = None) -> list[dict]:
+        """
+        Fetch data from the table based on filters, limit, and order
+        
+        Args:
+            filters (dict): The filters to apply to the query
+            limit (int): The maximum number of rows to return
+            order (str): The column to order by
+        Returns:
+            list[dict]: The rows from the table
+        """
         query = f"SELECT * FROM {self.schema}.{self}"
         if filters:
             # Convert filter dictionary to SQL string (with placeholders)
