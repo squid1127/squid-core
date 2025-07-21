@@ -30,20 +30,20 @@ class ImpersonateCore:
         logger.debug(f"Request for active {'guild' if guildMode else 'DM'} threads.")
 
         if forceUpdate:
-            logger.info("Forcing update of active threads.")
+            logger.debug("Forcing update of active threads.")
 
         else:
             if guildMode:
                 if hasattr(self, "active_threads_guild") and hasattr(
                     self, "active_threads_guild_time"
                 ):
-                    # logger.info(f"Cached threads found. | Cached time: {self.active_threads_guild_time} | Current time: {time.time()} | Time difference: {time.time() - self.active_threads_guild_time}")
+                    # logger.debug(f"Cached threads found. | Cached time: {self.active_threads_guild_time} | Current time: {time.time()} | Time difference: {time.time() - self.active_threads_guild_time}")
                     if time.time() - self.active_threads_guild_time < 1800:
-                        # logger.info("Returning cached threads.")
+                        # logger.debug("Returning cached threads.")
                         logger.debug("Using cached guild threads.")
                         return self.active_threads_guild
                     else:
-                        logger.warning("Cached threads found, but expired.")
+                        logger.debug("Cached threads found, but expired.")
                 else:
                     logger.warning("No cached threads found.")
 
@@ -51,13 +51,13 @@ class ImpersonateCore:
                 if hasattr(self, "active_threads_dm") and hasattr(
                     self, "active_threads_dm_time"
                 ):
-                    # logger.info(f"Cached threads found. | Cached time: {self.active_threads_dm_time} | Current time: {time.time()} | Time difference: {time.time() - self.active_threads_dm_time}")
+                    # logger.debug(f"Cached threads found. | Cached time: {self.active_threads_dm_time} | Current time: {time.time()} | Time difference: {time.time() - self.active_threads_dm_time}")
                     if time.time() - self.active_threads_dm_time < 1800:
-                        # logger.info("Returning cached threads.")
+                        # logger.debug("Returning cached threads.")
                         logger.debug("Using cached DM threads.")
                         return self.active_threads_dm
                     else:
-                        logger.warning("Cached threads found, but expired.")
+                        logger.debug("Cached threads found, but expired.")
                 else:
                     logger.warning("No cached threads found.")
 
@@ -80,12 +80,12 @@ class ImpersonateCore:
         ]
 
         # Check for duplicate threads
-        logger.info("Checking for duplicate threads.")
+        logger.debug("Checking for duplicate threads.")
         threads_processed = []
         modified = False
         for thread in threads:
             name = thread.name.split("//")[1]
-            # logger.info(f"Processing thread: {name} from {thread.name}")
+            # logger.debug(f"Processing thread: {name} from {thread.name}")
             if name not in threads_processed:
                 threads_processed.append(name)
             else:
@@ -104,7 +104,7 @@ class ImpersonateCore:
             name = thread.name.split("//")[1]
             thread_names[name] = thread
 
-        logger.info("Active threads updated.")
+        logger.debug("Active threads updated.")
 
         if guildMode:
             self.active_threads_guild = (threads, thread_names)
@@ -190,7 +190,7 @@ class ImpersonateCore:
             if dm:
                 thread = await self.get_thread(user=message.author)
                 channel = message.channel
-                logger.info(
+                logger.debug(
                     "Incoming message from: " + message.author.name + " in DMs",
                 )
             else:
@@ -315,7 +315,7 @@ class ImpersonateCore:
         self, channel: discord.TextChannel = None, user: discord.User = None, **kwargs
     ):
         """Create a thread to impersonate the bot inside the shell channel."""
-        logger.info(
+        logger.debug(
             "Getting thread for:" + channel.name if channel is not None else user.name,
         )
 
@@ -347,15 +347,15 @@ class ImpersonateCore:
             name = f"&&dm.{user.id}"
             name_readable = f"{user.name}//{name}"
 
-        logger.info("Constructed thread name: " + name_readable)
+        logger.debug("Constructed thread name: " + name_readable)
 
         if name in thread_names:
             # Get the thread
-            logger.info("Thread exists.")
+            logger.debug("Thread exists.")
             thread = thread_names[name]
         else:
             # Create a new thread
-            logger.info("Thread does not exist, creating.")
+            logger.debug("Thread does not exist, creating.")
             message = await self.shell.log(
                 f"Creating thread for {f'{channel.guild.name} - {channel.name}' if user is None else f'{user.name}#{user.discriminator}'}.",
                 title="Impersonation Thread",
@@ -371,7 +371,7 @@ class ImpersonateCore:
             else:
                 await self.populate_thread(thread, user=user)
 
-            logger.info("Thread created, updating active threads.")
+            logger.debug("Thread created, updating active threads.")
             await self.active_threads(guildMode=(user is None), forceUpdate=True)
             await thread.send(
                 embed=discord.Embed(
@@ -432,7 +432,7 @@ class ImpersonateCore:
             ):
                 messages.append(message)
         except AttributeError:
-            logger.info("No message history found.")
+            logger.debug("No message history found.")
             return thread
 
         if not messages:
@@ -526,13 +526,13 @@ class ImpersonateGuild(commands.Cog):
 
         name = f"&&guild.{message.guild.id}.{message.channel.id}"
         if name in thread_names.keys():
-            self.logger.info("Incoming message has matching thread, processing.")
+            self.logger.debug("Incoming message has matching thread, processing.")
             await self.core.handle(message=message, incoming=True)
 
     async def shell_callback(self, command: ShellCommand):
         if command.name == "impersonate-guild" or command.name == "ig":
             query = command.query
-            self.logger.info("Thread requseted with query:", query)
+            self.logger.debug("Thread requseted with query:", query)
 
             # * Special commands
             if query == "!clear":
@@ -649,7 +649,7 @@ class ImpersonateGuild(commands.Cog):
                 )
                 return
 
-            self.logger.info(
+            self.logger.debug(
                 f"Requesting thread for {guild.name} - {channel.name} ({guild.id}::{channel.id})"
             )
 
@@ -733,7 +733,7 @@ class ImpersonateDM(commands.Cog):
 
         name = f"&&dm.{message.author.id}"
         if name in thread_names.keys():
-            self.logger.info("Incoming message has matching thread, processing.")
+            self.logger.debug("Incoming message has matching thread, processing.")
         else:
             self.logger.info(
                 "Incoming message does not have a matching thread; creating one."
@@ -758,7 +758,7 @@ class ImpersonateDM(commands.Cog):
     async def shell_callback(self, command: ShellCommand):
         if command.name == "impersonate-dm" or command.name == "idm":
             query = command.query
-            self.logger.info("Thread requested with query:", query)
+            self.logger.debug("Thread requested with query:", query)
 
             # * Special commands
             if query == "!clear":
@@ -816,9 +816,9 @@ class ImpersonateDM(commands.Cog):
             # Parse input
             if query.startswith("<@") and query.endswith(">"):
                 try:
-                    self.logger.info(f"Looking for mention: {query}")
+                    self.logger.debug(f"Looking for mention: {query}")
                     user_id = int(query[2:-1])
-                    self.logger.info(f"Found user ID: {user_id}")
+                    self.logger.debug(f"Found user ID: {user_id}")
                     user = self.bot.get_user(user_id)
                 except:
                     await command.log(
@@ -835,7 +835,7 @@ class ImpersonateDM(commands.Cog):
                     )
                     return
             else:
-                self.logger.info(f"Looking for username: {query}")
+                self.logger.debug(f"Looking for username: {query}")
                 user = discord.utils.get(self.bot.users, name=query)
                 if user is None:
                     await command.log(
@@ -845,7 +845,7 @@ class ImpersonateDM(commands.Cog):
                     )
                     return
 
-            self.logger.info(f"Requesting thread for {user.name} ({user.id})")
+            self.logger.debug(f"Requesting thread for {user.name} ({user.id})")
 
             try:
                 thread = await self.core.get_thread(user=user)
@@ -865,7 +865,7 @@ class ImpersonateDM(commands.Cog):
                 )
                 return
 
-            self.logger.info(f"Impersonation thread: {thread.name}")
+            self.logger.debug(f"Impersonation thread: {thread.name}")
 
             await command.log(
                 f"Impersonation Thread: {thread.mention}",

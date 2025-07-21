@@ -631,8 +631,13 @@ class DatabaseCore:
             else:
                 logger.info(f"Found {keys_found} arguments for database connection")
 
+        # Redact sensitive information
+        connection_args_redacted = self.connection_args.copy()
+        if "password" in connection_args_redacted:
+            connection_args_redacted["password"] = "**REDACTED**"
+            
         if keys_found > 0:
-            logger.info(f"Connection arguments set: {self.connection_args}")
+            logger.info(f"Connection arguments set: {connection_args_redacted}")
         elif keys_found == 0:
             logger.warning("No connection arguments found")
         else:
