@@ -36,6 +36,8 @@ class UptimeManager(commands.Cog):
         self.bot = bot
         self.shell = shell
 
+        self.fails = 0
+
         self.enabled = False
         self.uptime_url = None
         self.provider = None
@@ -76,10 +78,12 @@ class UptimeManager(commands.Cog):
         if self.enabled:
             logger.info("Uptime Manager is ready.")
             self.push_uptime_task.start()
-            logger.info(f"Uptime check task started with interval: {self.interval} seconds")
+            logger.info(
+                f"Uptime check task started with interval: {self.interval} seconds"
+            )
 
     async def push_uptime(self):
-        """Push uptime status to the configured URL."""    
+        """Push uptime status to the configured URL."""
         params = {}
         if self.provider == "uptime_kuma":
             params["msg"] = f"{self.bot.user.name} is alive!"
@@ -101,14 +105,33 @@ class UptimeManager(commands.Cog):
             error = f"Uptime check failed: {e}"
         finally:
             if error:
-                logger.error(error)
-                await self.shell.log(
-                    error,
-                    title="Uptime Update Failed",
-                    msg_type="error",
-                )
-                return
-            logger.info("Uptime check successful")
+                self.fails += 1
+                if self.fails == 0:
+                    logger.error(error)
+                    await self.shell.log(
+                        error,
+                        title="Uptime Update Failed",
+                        msg_type="error",
+                    )
+                    return
+                elif self.fails == 10:
+                    await self.shell.log(
+                        "Uptime check failed 10 times in a row. Something is very wrong!",
+                        title="Uptime Manager 10x Failures",
+                        msg_type="warning",
+                    )
+                    return
+            self.fails = 0
+            logger.debug("Uptime check successful")
+            return
+        
+    async def cog_status(self) -> str:
+        """Return the status of the uptime manager."""
+        if not self.enabled:
+            return "Uptime Manager is disabled."
+        if self.fails > 0:
+            return f"Uptime Failed! Errors: {self.fails}"
+        return f"Uptime Manager is running with provider: {self.provider}, URL: {self.uptime_url}, Interval: {self.interval} seconds."
 
     DEFAULT_CONFIG = """# Uptime Manager Configuration
 
