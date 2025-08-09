@@ -1,8 +1,12 @@
 discord.py
-asyncpg
+
 coloredlogs
 watchdog
 pyyaml
 timedelta
 python-dotenv
+
 aiohttp
+
+redis
+motor

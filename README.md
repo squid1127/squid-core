@@ -1,11 +1,11 @@
 # squid-core
 
-A discord bot library providing core functionality to squid1127's bots, including basic management, and db connection.
+A discord bot library providing core functionality to squid1127's bots, including basic management, and memory management.
 
 ## Features
 
 - Built-in CLI within a Discord channel
-- Basic PostgreSQL support for data storage
+- Automatic memory management with Redis and MongoDB
 - Explore servers bot is in with built-in "impersonation" features
 - Automatic webhook system to report when bot fails to start up.
 - Randomized status messages
@@ -16,10 +16,5 @@ A discord bot library providing core functionality to squid1127's bots, includin
 
 Environment variables built-in to squid-core that can be used to configure the bot:
 
-- PostgreSQL Connection:
-  - `POSTGRES_DSN`: The full DSN string for connecting to the PostgreSQL database.
-  - `POSTGRES_HOST`: The hostname or IP address of the PostgreSQL server.
-  - `POSTGRES_PORT`: The port number on which the PostgreSQL server is listening.
-  - `POSTGRES_DB`: The name of the PostgreSQL database.
-  - `POSTGRES_USER`: The username for the PostgreSQL database.
-  - `POSTGRES_PASSWORD`: The password for the PostgreSQL database user.
+- `REDIS_URL`: The URL for connecting to the Redis server.
+- `MONGO_URL`: The URL for connecting to the MongoDB server.

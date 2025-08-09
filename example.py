@@ -26,13 +26,14 @@ bot_token = os.getenv('BOT_TOKEN') if bot_token == "" else bot_token
 bot_shell = int(os.getenv('BOT_SHELL')) if bot_shell == 0 else bot_shell
 logger.info(f"Bot token: {bot_token} | Bot shell: {bot_shell}")
 
-# Create a bot
-bot = squidcore.Bot(token=bot_token, shell_channel=bot_shell, name='TestBot')
-
-# Optional: Add a database (Required by discord explorer)
+# Optional: Add a database
 if use_db:
-    postgres_pool = os.getenv("POSTGRES_POOL") if os.getenv("POSTGRES_POOL") else 20
-    bot.add_db(os.getenv("POSTGRES_CONNECTION"), os.getenv("POSTGRES_PASSWORD"), int(postgres_pool))
+    memory = squidcore.Memory(redis=True, mongo=True, from_env=True)
+else:
+    memory = None
+
+# Create a bot
+bot = squidcore.Bot(token=bot_token, shell_channel=bot_shell, name='TestBot', memory=memory)
 
 # Run the bot
 logger.info("Running bot")
