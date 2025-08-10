@@ -1,5 +1,6 @@
 """A minimal example of a bot using squidcore."""
 
+#! WARNING! This example file is probably not up to date with the latest version of squidcore. Use at your own risk! Oh wait, this library is not meant for public use anyway....
 
 #* Variables
 
