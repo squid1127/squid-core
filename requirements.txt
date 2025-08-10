@@ -1,12 +1,16 @@
+# discord
 discord.py
 
+# general
 coloredlogs
 watchdog
 pyyaml
 timedelta
 python-dotenv
 
+# external calls
 aiohttp
 
+# database/memory management
 redis
 motor
