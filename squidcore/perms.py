@@ -388,7 +388,11 @@ class PermissionsManager(commands.Cog):
                 if not user_id_full.isdigit():
                     # Try to parse user ID from mention
                     user_id_full = user_id_full.strip("<@!>")
-                if not user_id_full.isdigit():
+                if user_id_full is None or not user_id_full.isdigit():
+                    # Try to parse user ID from mention, if user_id_full is not None
+                    if user_id_full is not None:
+                        user_id_full = user_id_full.strip("<@!>")
+                if user_id_full is None or not user_id_full.isdigit():
                     await command.log(
                         "Invalid user ID. Please provide a valid user ID or mention.",
                         title="Invalid Command",
