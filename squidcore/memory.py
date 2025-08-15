@@ -2,14 +2,49 @@
 
 import redis.asyncio as redis
 import motor.motor_asyncio
-from dataclasses import dataclass
+from urllib.parse import urlparse, urlunparse
 
 import os
-from dotenv import load_dotenv
 
 import logging
 
 logger = logging.getLogger("core.memory")
+
+def sanitize_url(url: str) -> str:
+    """
+    Sanitize a URL by removing sensitive credentials from it.
+    
+    Args:
+        url (str): The URL to sanitize.
+        
+    Returns:
+        str: The sanitized URL with credentials masked.
+    """
+    if not url:
+        return url
+    
+    try:
+        parsed = urlparse(url)
+        # If there's a password, mask it
+        if parsed.password:
+            # Replace password with asterisks
+            netloc = parsed.netloc.replace(f":{parsed.password}@", ":***@")
+        else:
+            netloc = parsed.netloc
+        
+        # Reconstruct URL without exposing credentials
+        sanitized = urlunparse((
+            parsed.scheme,
+            netloc,
+            parsed.path,
+            parsed.params,
+            parsed.query,
+            parsed.fragment
+        ))
+        return sanitized
+    except Exception:
+        # If URL parsing fails, return a generic message
+        return "[URL sanitization failed]"
 
 class InitError(Exception):
     """Custom exception for initialization errors in the Memory Manager."""
@@ -66,7 +101,7 @@ class Memory:
                 )
             else:
                 self.redis = redis.from_url(redis_url)
-            logger.info(f"Connected to Redis at {redis_url}")
+            logger.info(f"Connected to Redis at {sanitize_url(redis_url)}")
             
             # Test Redis connection
             try:
@@ -82,7 +117,7 @@ class Memory:
                 raise InitError("MongoDB URL must be provided. Use environment variable MONGO_URL.")
             self.mongo = motor.motor_asyncio.AsyncIOMotorClient(mongo_url)
             self.mongo_db = self.mongo.get_default_database()
-            logger.info(f"Connected to MongoDB at {mongo_url}")
+            logger.info(f"Connected to MongoDB at {sanitize_url(mongo_url)}")
 
             # Test MongoDB connection
             try:
