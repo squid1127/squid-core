@@ -1,3 +1,5 @@
+"""[DEPRECATED] Legacy database handler for the bot, including database connection and data management."""
+
 # External imports
 from discord.ext import commands, tasks
 import discord

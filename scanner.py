@@ -12,6 +12,10 @@ Environment Variables:
 Note that a database is required for the Discord explorer function to work.
 """
 
+#! WARNING! This example file is probably not up to date with the latest version of squidcore. Use at your own risk! Oh wait, this library is not meant for public use anyway....
+
+#! THIS DEFINITELY WON'T WORK
+
 import squidcore
 
 # Environment variables

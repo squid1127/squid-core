@@ -1,25 +1,28 @@
 # squid-core
 
-A discord bot library providing core functionality to squid1127's bots, including basic management, and db connection.
+A discord bot library providing core functionality to squid1127's bots, including basic management, and memory management.
+
+## Disclaimer
+
+This library is not intended for public use and is designed specifically for squid1127's bots. Please do not use this library for your own bots, as its structure and functionality may change without notice (a lot).
 
 ## Features
 
 - Built-in CLI within a Discord channel
-- Basic PostgreSQL support for data storage
-- Explore servers bot is in with built-in "impersonation" features
-- Automatic webhook system to report when bot fails to start up.
-- Randomized status messages
-- Automatic file provisioning for cogs
-- Sells a lot
+- Memory management using Redis and MongoDB
+- Basic bot management features
+- Basic permissions system (CLI is still accessible to everyone with access to its channel, which is used to set permissions)
+- Support for multiple cogs and extensions
+- DM system that allows admins to send direct messages to users via the bot
+- Discord explorer for viewing server information and user data (Use in private servers only, limited support)
+- Basic error handling and logging
+- Support for Uptime Kuma for monitoring bot status (passive monitors)
 
 ## Global Environment Variables
 
 Environment variables built-in to squid-core that can be used to configure the bot:
 
-- PostgreSQL Connection:
-  - `POSTGRES_DSN`: The full DSN string for connecting to the PostgreSQL database.
-  - `POSTGRES_HOST`: The hostname or IP address of the PostgreSQL server.
-  - `POSTGRES_PORT`: The port number on which the PostgreSQL server is listening.
-  - `POSTGRES_DB`: The name of the PostgreSQL database.
-  - `POSTGRES_USER`: The username for the PostgreSQL database.
-  - `POSTGRES_PASSWORD`: The password for the PostgreSQL database user.
+- `REDIS_URL`: The URL for connecting to the Redis server.
+- `MONGO_URL`: The URL for connecting to the MongoDB server.
+
+Note: These variables are only used if the bot is configured to use Redis and MongoDB for memory management.

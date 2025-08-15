@@ -5,7 +5,6 @@ import discord
 from discord.ext import commands, tasks
 
 from .shell import ShellCore, ShellCommand
-from .db import DatabaseCore, DiscordData
 
 import logging
 
@@ -20,7 +19,6 @@ class DiscordExplorer(commands.Cog):
 
     def __init__(self, bot: commands.Bot):
         self.bot = bot
-        self.db: DatabaseCore = bot.db
         self.shell: ShellCore = bot.shell
 
         self.interactive_state = {}
@@ -579,7 +577,7 @@ class DiscordExplorer(commands.Cog):
             elif isinstance(item, discord.TextChannel):
                 # One channel.
                 if view == "single":
-                    current_string += f"### \#{item.name} ({item.id})\n"
+                    current_string += f"### #{item.name} ({item.id})\n"
                     current_string += item.topic + "\n" if item.topic else "No topic.\n"
                     current_string += f"**ID:** {item.id}\n"
                     current_string += (
@@ -590,7 +588,7 @@ class DiscordExplorer(commands.Cog):
 
                 # Multiple channels.
                 elif view == "detailed":
-                    current_string += f"**{count}. \#{item.name} ({item.id})**\n"
+                    current_string += f"**{count}. #{item.name} ({item.id})**\n"
                     current_string += item.topic + "\n" if item.topic else "No topic.\n"
                     current_string += f"Guild: {item.guild.name} ({item.guild.id})\n"
                     current_string += (
@@ -599,7 +597,7 @@ class DiscordExplorer(commands.Cog):
 
                 # A lot of channels.
                 else:
-                    current_string += f"{count}. \#{item.name} ({item.id}) | {item.guild.name} ({item.guild.id}) | {item.mention} | {len(item.members)} Members"
+                    current_string += f"{count}. #{item.name} ({item.id}) | {item.guild.name} ({item.guild.id}) | {item.mention} | {len(item.members)} Members"
 
             # Members
             elif isinstance(item, discord.Member) or isinstance(item, discord.User):
