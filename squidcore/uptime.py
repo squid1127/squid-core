@@ -41,7 +41,6 @@ class UptimeManager(commands.Cog):
         self.enabled = False
         self.uptime_url = None
         self.provider = None
-        self.interval = 120  # Default interval in seconds
 
         self.files = self.bot.filebroker.configure_cog(
             "UptimeManager",
@@ -52,9 +51,7 @@ class UptimeManager(commands.Cog):
             cache_clear_on_init=True,
         )
         self.files.init()
-
-        # Create a custom task object
-        self.push_uptime_task = tasks.loop(seconds=self.interval)(self.push_uptime)
+        self.push_uptime.start()
 
     async def load_config(self, reload: bool = False):
         self.config = self.files.get_config(cache=not reload)
@@ -66,22 +63,7 @@ class UptimeManager(commands.Cog):
             logger.warning("Uptime Manager is disabled or URL is not set.")
             return
 
-    def cog_unload(self):
-        """Stop the uptime check task when the cog is unloaded."""
-        self.push_uptime_task.stop()
-
-    @commands.Cog.listener()
-    async def on_ready(self):
-        """Start the uptime check task when the bot is ready."""
-        logger.info("Starting Uptime Manager...")
-        await self.load_config()
-        if self.enabled:
-            logger.info("Uptime Manager is ready.")
-            self.push_uptime_task.start()
-            logger.info(
-                f"Uptime check task started with interval: {self.interval} seconds"
-            )
-
+    @tasks.loop(seconds=120)
     async def push_uptime(self):
         """Push uptime status to the configured URL."""
         params = {}
@@ -94,6 +76,11 @@ class UptimeManager(commands.Cog):
             async with aiohttp.ClientSession() as session:
                 async with session.get(self.uptime_url, params=params) as response:
                     if response.status == 200:
+                        if self.fails > 0:
+                            logger.info(
+                                f"Uptime check recovered after {self.fails} failures."
+                            )
+                        self.fails = 0  # Reset on success
                         logger.info(f"Uptime check successful: {response.status}")
                     else:
                         error = f"Uptime check failed: {response.status}"
@@ -103,28 +90,41 @@ class UptimeManager(commands.Cog):
             error = "Uptime check timed out"
         except Exception as e:
             error = f"Uptime check failed: {e}"
-        finally:
-            if error:
-                self.fails += 1
-                if self.fails == 0:
-                    logger.error(error)
-                    await self.shell.log(
-                        error,
-                        title="Uptime Update Failed",
-                        msg_type="error",
-                    )
-                    return
-                elif self.fails == 10:
-                    await self.shell.log(
-                        "Uptime check failed 10 times in a row. Something is very wrong!",
-                        title="Uptime Manager 10x Failures",
-                        msg_type="warning",
-                    )
-                    return
-            self.fails = 0
-            logger.debug("Uptime check successful")
+
+        if error:
+            self.fails += 1
+            logger.error(f"Uptime check failure #{self.fails}: {error}")
+            if self.fails == 1:  # First failure
+                await self.shell.log(
+                    error,
+                    title="Uptime Update Failed",
+                    msg_type="error",
+                )
+            elif self.fails == 10:  # 10th failure
+                await self.shell.log(
+                    "Uptime check failed 10 times in a row. Something is very wrong!",
+                    title="Uptime Manager 10x Failures",
+                    msg_type="warning",
+                )
+
+    @push_uptime.before_loop
+    async def before_push_uptime(self):
+        logger.info("Preparing to push uptime status...")
+        await self.bot.wait_until_ready()
+        # Load configuration
+        await self.load_config()
+        if not self.enabled:
+            logger.warning("Uptime Manager is disabled. Task will not start.")
+            self.push_uptime.cancel()
             return
-        
+        # Update the loop interval
+        self.push_uptime.change_interval(seconds=self.interval)
+        logger.info(f"Uptime check interval set to {self.interval} seconds.")
+
+    async def cog_unload(self):
+        """Stop the uptime check task when the cog is unloaded."""
+        self.push_uptime.cancel()
+
     async def cog_status(self) -> str:
         """Return the status of the uptime manager."""
         if not self.enabled:
