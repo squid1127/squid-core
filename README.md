@@ -2,6 +2,10 @@
 
 A discord bot library providing core functionality to squid1127's bots, including basic management, and memory management.
 
+## Legacy Code
+
+This branch, `legacy`, contains the old version of squid-core, which is no longer maintained. It is kept for reference purposes only and may be removed in the future.
+
 ## Disclaimer
 
 This library is not intended for public use and is designed specifically for squid1127's bots. Please do not use this library for your own bots, as its structure and functionality may change without notice (a lot).
