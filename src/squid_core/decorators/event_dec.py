@@ -2,6 +2,7 @@
 from .base import Decorator, DecoratorManager
 from ..plugin_base import Plugin
 
+@DecoratorManager.add
 class FwEventListener(Decorator):
     """Decorator to register an event listener."""
 
@@ -25,6 +26,3 @@ class FwEventListener(Decorator):
                 f"Failed to register event listener '{func.__name__}' for event '{self.event_name}' in plugin '{plugin.name}': {e}"
             )
             raise e
-
-# Register the decorator
-DecoratorManager.add(FwEventListener)

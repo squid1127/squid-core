@@ -2,6 +2,7 @@
 from .base import Decorator, DecoratorManager
 from ..plugin_base import Plugin
 
+@DecoratorManager.add
 class DiscordEventListener(Decorator):
     """Decorator to register a Discord event listener."""
 
@@ -26,5 +27,3 @@ class DiscordEventListener(Decorator):
             )
             raise e
         
-# Register the decorator
-DecoratorManager.add(DiscordEventListener)

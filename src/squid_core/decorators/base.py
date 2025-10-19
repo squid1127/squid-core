@@ -38,9 +38,10 @@ class DecoratorManager:
     decorators: dict[str, type[Decorator]] = {}
     
     @classmethod
-    def add(cls, decorator_cls: type[Decorator]) -> None:
-        """Register a new decorator class."""
+    def add(cls, decorator_cls: type[Decorator]) -> type[Decorator]:
+        """Register a new decorator class. Can be used as a class decorator."""
         cls.decorators[decorator_cls.__name__] = decorator_cls
+        return decorator_cls
         
     @classmethod
     def get(cls, name: str) -> type[Decorator] | None:

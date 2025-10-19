@@ -3,6 +3,7 @@ from .base import Decorator, DecoratorManager
 from ..plugin_base import Plugin
 from ..components.cli import CLICommand as CLICommandType
 
+@DecoratorManager.add
 class CLICommand(Decorator):
     """Decorator to register a CLI command."""
 
@@ -36,5 +37,3 @@ class CLICommand(Decorator):
             )
             raise e
         
-# Register the decorator
-DecoratorManager.add(CLICommand)
