@@ -3,7 +3,7 @@ name = "squid-core"
 version = "0.1.0"
 description = "A discord.py-based framework for building discord bots"
 authors = [
-    { name = "squid1127", email = "120748767+squid1127@users.noreply.github.com" }
+    { name = "squid1127", email = "120748767+squid1127@users.noreply.github.com" },
 ]
 license = "MIT"
 readme = "README.md"
@@ -12,8 +12,16 @@ requires-python = ">=3.11,<4.0"
 dependencies = [
     "discord.py",
     "aiohttp",
+    "aioredis",
+    "aiofiles",
+    "pyyaml",
+    "pydantic",
+    "pydantic-settings",
+    "python-dotenv",
+    "coloredlogs",
+    "tortoise-orm",
     "asyncpg",
-    "SQLAlchemy>=2.0.0",
+    "databases[asyncpg]",
 ]
 
 [build-system]
