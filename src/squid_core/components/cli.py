@@ -44,11 +44,9 @@ class CLIContext:
         return await self.message.channel.send(embed=embed)
     async def respond_exception(self, title: str, exception: Exception) -> discord.Message:
         """Respond to the command with an exception embed."""
-        embed = EmbedGenerator.execption(title, exception, self)
-        attachment = EmbedGenerator.execption_attach(exception)
+        embed = EmbedGenerator.exception(title, exception, self)
+        attachment = EmbedGenerator.exception_attach(exception)
         return await self.message.channel.send(embed=embed, file=attachment)
-
-
 
 
 class CLIManager:
@@ -182,13 +180,13 @@ class EmbedGenerator:
         return embed
     
     @classmethod
-    def execption(cls, title: str, exception: Exception, ctx: CLIContext) -> discord.Embed:
+    def exception(cls, title: str, exception: Exception, ctx: CLIContext) -> discord.Embed:
         """Generate an embed for exceptions."""
         description = f"```{type(exception).__name__}: {str(exception)}```"
         return cls.generate_embed(title, description, EmbedLevel.ERROR, ctx)
     
     @classmethod
-    def execption_attach(cls, exception: Exception) -> discord.File:
+    def exception_attach(cls, exception: Exception) -> discord.File:
         """Generate an attachment containing exception traceback."""
         import traceback
         from io import StringIO
