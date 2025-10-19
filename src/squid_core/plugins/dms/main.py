@@ -1,8 +1,9 @@
 """Main module for the DMS plugin."""
 
 from squid_core.framework import Framework
-from squid_core.components.cli import CLICommand, CLIContext, EmbedLevel
+from squid_core.components.cli import CLIContext, EmbedLevel
 from squid_core.plugin_base import Plugin as PluginBase, PluginCog, PluginComponent
+from squid_core.decorators import DiscordEventListener, CLICommandDec
 from discord.ext import commands
 import discord
 import io
@@ -10,12 +11,12 @@ from dataclasses import dataclass
 
 from .config import DMConfig
 
-
 class DMPlugin(PluginBase):
     def __init__(self, framework: Framework) -> None:
         super().__init__(framework)
         self.cog = DMCog(self)
         self.config: DMConfig | None = None
+        self.cli = DMCommandLine(self)
         self.thread_generator = ThreadGenerator(self)
 
     async def load(self) -> None:
@@ -31,6 +32,85 @@ class DMPlugin(PluginBase):
         self.logger.info("DM plugin unloading...")
         await self.fw.bot.remove_cog(self.cog.qualified_name)
 
+class DMCommandLine(PluginComponent):
+    """CLI commands for the DM plugin."""
+
+    def __init__(self, plugin: DMPlugin) -> None:
+        super().__init__(plugin)
+        self.plugin: DMPlugin = plugin
+        
+    @CLICommandDec(
+        name="dm",
+        aliases=["dms"],
+        description="Fetch a DM thread for a user.",
+    )
+    async def dm_command(self, context: CLIContext) -> None:
+        """A sample DM command."""
+        
+        target = context.args[0] if context.args else ""
+        if not target:
+            await context.respond(
+                "DM Command | Syntax Error",
+                "Please provide a user ID, username, or mention to fetch the DM thread.",
+                level=EmbedLevel.ERROR,
+            )
+            return
+        
+        # Parse the target into a uid, username, or mention
+        user: discord.User | None = None
+        if target.isdigit():
+            uid = int(target)
+            try:
+                user = await self.plugin.fw.bot.fetch_user(uid)
+            except Exception as e:
+                await context.respond(
+                    "DM Command | Fetch Error",
+                    f"Failed to fetch user with ID {uid}: {e}",
+                    level=EmbedLevel.ERROR,
+                )
+                return
+        elif target.startswith("<@") and target.endswith(">"):
+            # Mention format
+            uid_str = target.replace("<@", "").replace("!", "").replace(">", "")
+            if uid_str.isdigit():
+                uid = int(uid_str)
+                try:
+                    user = await self.plugin.fw.bot.fetch_user(uid)
+                except Exception as e:
+                    await context.respond(
+                        "DM Command | Fetch Error",
+                        f"Failed to fetch user with ID {uid}: {e}",
+                        level=EmbedLevel.ERROR,
+                    )
+                    return
+        else:
+            # Try to find by username (not guaranteed to be unique)
+            for member in self.plugin.fw.bot.users:
+                if member.name == target or f"{member.name}#{member.discriminator}" == target:
+                    user = member
+                    break
+            if not user:
+                await context.respond(
+                    "DM Command | User Not Found",
+                    f"Could not find a user with username '{target}'.",
+                    level=EmbedLevel.ERROR,
+                )
+                return
+            
+        # Get or create the DM thread
+        thread = await self.plugin.thread_generator.get_for_user(user)
+        if not thread:
+            await context.respond(
+                "DM Command | Thread Error",
+                f"Failed to get or create a DM thread for user {user}.",
+                level=EmbedLevel.ERROR,
+            )
+            return
+        await context.respond(
+            "DM Command | Success",
+            f"DM thread for user {user} is available: {thread.mention}",
+            level=EmbedLevel.SUCCESS,
+        )
 
 class DMCog(PluginCog):
     """Cog for handling DM-related commands and events."""
@@ -40,26 +120,8 @@ class DMCog(PluginCog):
         self.plugin: DMPlugin = plugin  # Override type for convenience
         self.plugin.logger.info("DMCog initialized.")
 
-        # Add commands
-        self.plugin.fw.cli.register_command(
-            CLICommand(
-                "dm",
-                aliases=["dms"],
-                description="DM related command.",
-                execute=self.dm_command,
-                plugin=self.plugin.name,
-            )
-        )
-
-    async def dm_command(self, context: CLIContext) -> None:
-        """A sample DM command."""
-        await context.respond(
-            "DM Command",
-            "This is a response from the DM command.",
-            level=EmbedLevel.INFO,
-        )
-
-    @commands.Cog.listener()
+    # @commands.Cog.listener()
+    @DiscordEventListener()
     async def on_message(self, message: discord.Message) -> None:
         if isinstance(message.channel, discord.DMChannel):
             await self.on_dm(message)
@@ -113,17 +175,24 @@ class DMCog(PluginCog):
             return
 
         # Forward the message to the user
-        dm_channel = user.dm_channel
-        if dm_channel is None:
-            dm_channel = await user.create_dm()
-        response = await self.plugin.thread_generator.transform_message(
-            message,
-            embed_mode=False,
-            native_reply_mode=True,
-            destination=dm_channel,
-            send_method=dm_channel.send,
-            native_reply_mode_auto_send=True,
-        )  # False to make it appear the bot is sending directly + native replies
+        try:
+            dm_channel = user.dm_channel
+            if dm_channel is None:
+                dm_channel = await user.create_dm()
+            response = await self.plugin.thread_generator.transform_message(
+                message,
+                embed_mode=False,
+                native_reply_mode=True,
+                destination=dm_channel,
+                send_method=dm_channel.send,
+                native_reply_mode_auto_send=True,
+            )  # False to make it appear the bot is sending directly + native replies
+        except Exception as e:
+            self.plugin.logger.error(
+                f"Failed to send message to user {user.id} from thread {thread.id}: {e}"
+            )
+            await message.add_reaction("❌")  # Indicate failure
+            return
         
 
         try:
@@ -139,8 +208,6 @@ class DMCog(PluginCog):
                 await message.add_reaction("✅")  # Acknowledge the message was sent
             except discord.NotFound:
                 pass
-
-
 class ThreadGenerator(PluginComponent):
     """Utility class to generate and manage threads for DMs."""
 
