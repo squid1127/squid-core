@@ -93,6 +93,7 @@ class Framework:
         # Start the bot
         try:
             self.logger.info(f"Starting {self.settings.friendly_name}...")
+            await self.event_bus.dispatch("framework_bot_init")
             await self.bot.start(token=self.settings.bot_token)
             self.logger.info("Received exit signal. Shutting down...")
         finally:
@@ -127,6 +128,7 @@ class Framework:
         """Initialize core components like database, CLI, etc."""
         from .components.db import Database
         from .components.cli import CLIManager
+        from .components.events import EventBus
 
         self.db: Database = Database(
             url=self.settings.database_url,
@@ -138,12 +140,16 @@ class Framework:
             cli_prefix=self.settings.cli_prefix,
         )
 
+        self.event_bus: EventBus = EventBus()
+
     async def async_init_core_components(self):
         """Asynchronously initialize core components like database, CLI, etc."""
         self.logger.info("Initializing core components...")
         await self.config.attach_db(self.db)  # Attach DB to config manager
         await self.db.init()
+        await self.event_bus.dispatch("framework_core_initialized", framework=self)
 
     async def close_core_components(self):
         """Asynchronously close core components like database, CLI, etc."""
         await self.db.close()
+        await self.event_bus.dispatch("framework_core_terminated", framework=self)
