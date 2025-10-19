@@ -1,0 +1,1 @@
+"""Core components for squid-core, including db, cli, and other essential parts."""
