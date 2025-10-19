@@ -69,6 +69,15 @@ class CLIManager:
         self.bot.add_listener(self.on_message)
 
         self.commands: list[CLICommand] = []
+        self.register_command(
+            CLICommand(
+                "help",
+                aliases=["h", "?"],
+                description="Show help information for CLI commands.",
+                execute=self.help_command,
+                internal=True,
+            )
+        )
 
     async def on_message(self, message: discord.Message) -> None:
         """Listener for messages to process CLI commands."""
@@ -77,17 +86,17 @@ class CLIManager:
         if message.author.bot:
             return  # Ignore messages from bots
         
-        self.logger.info(f"Received CLI message from {message.author} in channel {message.channel}")
+        self.logger.debug(f"Received CLI message from {message.author} in channel {message.channel}")
 
-
-        if not message.content.startswith(self.cli_prefix):
+        if message.content.strip() == self.cli_prefix.strip():
+            content = "help"  # Default to help command if only prefix is sent
+        elif not message.content.startswith(self.cli_prefix):
             return  # Ignore messages that don't start with the CLI prefix
-
-
-        # Parse command and arguments
-        content = message.content[len(self.cli_prefix) :].strip()
-        if not content:
-            return  # No command provided
+        else:
+            # Parse command and arguments
+            content = message.content[len(self.cli_prefix) :].strip()
+            if not content:
+                content = "help"  # Default to help command if no content after prefix
 
         # Split the content into command and arguments
         parts = shell_split(content)
@@ -97,6 +106,7 @@ class CLIManager:
         # Retrieve the command
         command = self.get_command(command_name)
         if not command:
+            await message.channel.send(f"❌ Command '{command_name}' not found.")
             return  # Command not found
         
         # Create context object
@@ -108,6 +118,7 @@ class CLIManager:
         try:
             await command.execute(context)
         except Exception as e:
+            self.logger.error(f"Error executing CLI command {command.name}: {e}", exc_info=True)
             await context.respond_exception("CLI - Execution Error", e)
 
     async def notify(self, title: str, description: str, level: EmbedLevel, plugin: str = None) -> list[discord.Message]:
@@ -151,6 +162,13 @@ class CLIManager:
             if isinstance(channel, discord.TextChannel):
                 channels.append(channel)
         return channels
+    
+    async def help_command(self, context: CLIContext) -> None:
+        """Provide help information for CLI commands."""
+        description = "Available CLI Commands:\n"
+        for command in self.commands:
+            description += f"**{command.name}** - {command.description}\n"
+        await context.respond("CLI Help", description, EmbedLevel.INFO)
     
 class EmbedGenerator:
     """Utility class for generating command responses as embeds."""
