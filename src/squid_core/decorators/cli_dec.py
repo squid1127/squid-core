@@ -8,7 +8,14 @@ class CLICommand(Decorator):
     """Decorator to register a CLI command."""
 
     def __init__(self, name:str, aliases:list[str], description:str) -> None:
-        """Initialize the decorator with the CLI command."""
+        """
+        Initialize the decorator with the CLI command.
+        
+        Args:
+            name (str): The name of the CLI command.
+            aliases (list[str]): List of aliases for the CLI command.
+            description (str): Description of the CLI command.
+        """
         super().__init__()
         self.cmd_name = name
         self.cmd_aliases = aliases
