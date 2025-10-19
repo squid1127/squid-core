@@ -1,0 +1,32 @@
+# Framework manifest/configuration file
+# Read by the framework to configure bot settings
+#! NOT a pyproject.toml file
+
+[project] # Project metadata
+name = "example-bot"
+friendly_name = "Example Bot"
+version = "0.1.0"
+description = "An example Discord bot using the squid-core framework"
+
+[framework]
+require = ["redis", "database"] # Required services
+
+[bot] # Discord bot settings
+cmd_prefix = "!example "
+intents = ["guilds", "members", "messages", "message_content"]
+
+[bot.activity] # Bot activity settings
+type = "playing"
+name = "squid-core"
+
+[bot.cli] # CLI settings
+prefix = "squid "
+
+[log] # Logging configuration
+level = "INFO"  # DEBUG, INFO, WARNING, ERROR, CRITICAL
+debug_mode = false  # Enable debug mode for verbose output
+console = true  # Output logs to console
+file = "logs/bot.log"  # Optional: Log to file (comment out to disable)
+
+[plugins] # Plugin configuration
+plugins = ["core:dms"] # Core plugins to load
