@@ -1,0 +1,3 @@
+[plugin]
+name = "dms"
+description = "DM users using the bot as an intermediary, using threads in CLI channels to facilitate DMs through the bot."
