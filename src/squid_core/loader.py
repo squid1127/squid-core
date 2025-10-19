@@ -9,6 +9,7 @@ from enum import Enum
 from .logging import get_framework_logger
 from .config import ConfigManager
 from .plugin_base import Plugin as PluginObject
+from .decorators.base import DecoratorApplyError, DecoratorManager
 
 PLUGIN_CLASS_NAME = "Plugin"
 
@@ -202,6 +203,15 @@ class PluginManager:
                     self.framework.db.register_model(
                         f"{plugin.module_path}.{model_path}"
                     )  # Register model module (relative path)
+                    
+            # Apply decorators
+            try:
+                await DecoratorManager.apply(plugin.plugin_instance)
+            except DecoratorApplyError as dae:
+                self.logger.error(
+                    f"Failed to apply decorators for plugin {plugin.name}: {dae}"
+                )
+                raise dae
 
             # Call preload method if exists
             if hasattr(plugin.plugin_instance, "preload"):
