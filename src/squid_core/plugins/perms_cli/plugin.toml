@@ -1,0 +1,4 @@
+[plugin]
+name = "perms_cli"
+description = "Manage user permissions and attributes through the CLI."
+class = "PermsCLIPlugin"
