@@ -29,4 +29,7 @@ console = true  # Output logs to console
 file = "logs/bot.log"  # Optional: Log to file (comment out to disable)
 
 [plugins] # Plugin configuration
-plugins = ["core:dms"] # Core plugins to load
+plugins = ["core:*"] # Core plugins to load
+
+[plugins.perms_cli]
+use_cog = true  # Use permissions CLI cog
