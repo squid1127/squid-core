@@ -187,7 +187,7 @@ class CLIManager:
         description = "Available CLI Commands:\n"
         for command in self.commands:
             description += f"**{command.name}** - {command.description}\n"
-        await context.respond(description, title="CLI Help", embed_level=EmbedLevel.INFO)
+        await context.respond(description, title="CLI Help", level=EmbedLevel.INFO)
 
 class EmbedGenerator:
     """Utility class for generating command responses as embeds."""
