@@ -152,11 +152,23 @@ class DMCog(PluginCog):
             return
 
         # Forward the message to the thread
-        response = await self.plugin.thread_generator.transform_message(
-            message, embed_mode=True, send_method=thread.send
-        )
+        try:
+            response = await self.plugin.thread_generator.transform_message(
+                message, embed_mode=True, send_method=thread.send
+            )
+        except discord.NotFound:
+            # Assume cache is stale, invalidate and retry once
+            self.plugin.logger.warning(f"Thread not found for user {user.id}, retrying...")
+            self.plugin.thread_generator.cache_invalidate(user=user)
+            return await self.on_dm(message, skip_checks=skip_checks)
+        except Exception as e:
+            self.plugin.logger.error(
+                f"Failed to send message to thread {thread.id} for user {user.id}: {e}"
+            )
+            await message.reply("Your message could not be delivered. ❌ Oh? You didn't know where it was going? Yeah no I send DMs straight to the admins :)")
+            return
 
-    async def on_thread(self, thread: discord.Thread, message: discord.Message) -> None:
+    async def on_thread(self, thread: discord.Thread, message: discord.Message, retry: bool = False) -> None:
         """Handle messages in threads where the parent is a CLI channel."""
         if not thread.parent_id in self.plugin.fw.cli.allowed_channel_ids:
             return  # Not a CLI channel thread
@@ -177,7 +189,8 @@ class DMCog(PluginCog):
             dm_channel = user.dm_channel
             if dm_channel is None:
                 dm_channel = await user.create_dm()
-            response = await self.plugin.thread_generator.transform_message(
+            try:
+                response = await self.plugin.thread_generator.transform_message(
                 message,
                 embed_mode=False,
                 native_reply_mode=True,
@@ -185,14 +198,31 @@ class DMCog(PluginCog):
                 send_method=dm_channel.send,
                 native_reply_mode_auto_send=True,
             )  # False to make it appear the bot is sending directly + native replies
+            except discord.Forbidden:
+                if retry:
+                    self.plugin.logger.error(f"Cannot send DMs to user {user.id} (Forbidden).")
+                    await message.add_reaction("❌")  # Indicate failure
+                    return
+                # Assume cache is stale, invalidate and retry once
+                self.plugin.thread_generator.cache_invalidate(user=user)
+                return await self.on_thread(thread, message, retry=True)
+            except discord.NotFound:
+                if retry:
+                    self.plugin.logger.error(f"Cannot send DMs to user {user.id} (Not Found).")
+                    await message.add_reaction("❌")  # Indicate failure
+                    return
+                # Assume cache is stale, invalidate and retry once
+                self.plugin.logger.warning(f"DM channel not found for user {user.id}, retrying...")
+                self.plugin.thread_generator.cache_invalidate(user=user)
+                return await self.on_thread(thread, message, retry=True)
         except Exception as e:
             self.plugin.logger.error(
                 f"Failed to send message to user {user.id} from thread {thread.id}: {e}"
             )
             await message.add_reaction("❌")  # Indicate failure
             return
-        
-
+    
+        # Convert new message(s) back into embeds
         try:
             new_message = response[0] if isinstance(response, list) else response
             # Delete the original message and create a transformed message
@@ -206,6 +236,7 @@ class DMCog(PluginCog):
                 await message.add_reaction("✅")  # Acknowledge the message was sent
             except discord.NotFound:
                 pass
+            
 class ThreadGenerator(PluginComponent):
     """Utility class to generate and manage threads for DMs."""
 
@@ -249,6 +280,17 @@ class ThreadGenerator(PluginComponent):
     def cache_add(self, user: discord.User, thread: discord.Thread, dm_channel: discord.DMChannel | None) -> None:
         """Add a user-thread-dm_channel mapping to the cache."""
         self.cache.append(CachedThread(user=user, thread=thread, dm_channel=dm_channel))
+    
+    def cache_invalidate(self, user: discord.User = None, thread: discord.Thread = None, dm_channel: discord.DMChannel = None) -> None:
+        """Invalidate cache entries based on user, thread, or dm_channel."""
+        self.cache = [
+            cached for cached in self.cache
+            if not (
+                (user and cached.user.id == user.id) or
+                (thread and cached.thread.id == thread.id) or
+                (dm_channel and cached.dm_channel and cached.dm_channel.id == dm_channel.id)
+            )
+        ]
 
     async def get_for_user(self, user: discord.User) -> discord.Thread | None:
         """Get or create a thread for the given user."""
@@ -262,7 +304,7 @@ class ThreadGenerator(PluginComponent):
         # Check cache first
         cached_thread = self.cache_get_thread(user)
         if cached_thread:
-            self.plugin.logger.info(
+            self.plugin.logger.debug(
                 f"Using cached thread for user {user.id}: {cached_thread.id}"
             )
             return cached_thread
@@ -312,7 +354,7 @@ class ThreadGenerator(PluginComponent):
         # Check cache first
         cached_user = self.cache_get_user(thread)
         if cached_user:
-            self.plugin.logger.info(
+            self.plugin.logger.debug(
                 f"Using cached user for thread {thread.id}: {cached_user.id}"
             )
             return cached_user
