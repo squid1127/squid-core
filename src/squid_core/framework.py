@@ -56,26 +56,29 @@ class Framework:
         self.logger.info("Framework initialized")
 
     @classmethod
-    async def create_async(cls, manifest: Path = Path("framework.toml")) -> "Framework":
+    async def create_async(cls, manifest: Path = Path("framework.toml"), env_file: Path | None = None) -> "Framework":
         """Asynchronous factory method to create a Framework instance."""
 
         # Init Config
-        config = ConfigManager(global_manifest=manifest)
+        config = ConfigManager(global_manifest=manifest, env_file=env_file)
 
         # Fetch framework settings
         settings: FWSettings = await FWSettings.resolve(config, None)
         return cls(config=config, settings=settings)
 
     @classmethod
-    def create(cls, manifest: Path = Path("framework.toml")) -> "Framework":
+    def create(
+        cls, manifest: Path = Path("framework.toml"), env_file: Path | None = None
+    ) -> "Framework":
         """
         Synchronous factory method to create a Framework instance. Uses asyncio.run internally.
         Use `create_async` for fully asynchronous initialization.
-        
+
         Args:
             manifest (Path): Path to the framework manifest file. Defaults to "framework.toml".
+            env_file (Path | None): Path to the environment file. Defaults to None.
         """
-        return asyncio.run(cls.create_async(manifest=manifest))
+        return asyncio.run(cls.create_async(manifest=manifest, env_file=env_file))
 
     async def start(self):
         """Asynchronous start method to launch the framework."""
