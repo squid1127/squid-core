@@ -4,3 +4,4 @@
 from .discord_dec import DiscordEventListener
 from .event_dec import FwEventListener
 from .cli_dec import CLICommand as CLICommandDec
+from .redis import RedisSubscribe
