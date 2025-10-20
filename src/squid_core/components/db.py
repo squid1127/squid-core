@@ -20,6 +20,7 @@ class Database:
             raise RuntimeError("Database connection is already initialized. Cannot re-initialize until closed.")
         self.logger.info(f"Initializing database connection with {len(self._models)} models...")
         await Tortoise.init(db_url=self.url, modules={"models": self._models})
+        await Tortoise.generate_schemas(safe=True)
         self.active = True
         self.logger.info("Database connection initialized.")
         
