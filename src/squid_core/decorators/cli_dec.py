@@ -7,7 +7,7 @@ from ..components.cli import CLICommand as CLICommandType
 class CLICommand(Decorator):
     """Decorator to register a CLI command."""
 
-    def __init__(self, name:str, aliases:list[str], description:str) -> None:
+    def __init__(self, name:str, description:str, aliases:list[str]=[]) -> None:
         """
         Initialize the decorator with the CLI command.
         
