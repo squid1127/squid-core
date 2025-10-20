@@ -34,7 +34,7 @@ use_cog = true
 
 ## Other Configuration Sources
 
-> ![NOTE]
+> [!NOTE]
 > Configuration Options often support multiple sources for flexibility. `*` in the Source column indicates that the option can be set via all available sources (configuration file, environment variable, db, etc.).
 
 | Source      | Description                                                                                    | Naming Convention (Ex)                         |
