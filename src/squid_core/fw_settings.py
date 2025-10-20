@@ -26,6 +26,7 @@ class FWSettings(ConfigSchema):
     
     # Database Settings
     database_url: str | None
+    redis_url: str | None
     # CLI Settings
     cli_prefix: str
     cli_channels: list[int] | None
@@ -137,4 +138,12 @@ class FWSettings(ConfigSchema):
             enforce_type_coerce=True, # Needed to coerce from env var string
             description="A list of channel IDs where CLI commands are allowed.",
         ),
+        "redis_url": ConfigOption(
+            name=["redis", "url"],
+            sources=[ConfigSource.ENVIRONMENT, ConfigSource.DEFAULT], # Redis must be set via env var if used
+            default=ConfigRequired,
+            enforce_type=str,
+            enforce_type_coerce=True,
+            description="The URL for the Redis instance used by the framework.",
+        )
     }

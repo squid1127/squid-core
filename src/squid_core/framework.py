@@ -127,12 +127,19 @@ class Framework:
     def init_core_components(self):
         """Initialize core components like database, CLI, etc."""
         from .components.db import Database
+        from .components.redis_comp import Redis
         from .components.cli import CLIManager
         from .components.events import EventBus
+        from .components.perms import Perms
+
+        self.redis: Redis = Redis(
+            url=self.settings.redis_url,
+        )
 
         self.db: Database = Database(
             url=self.settings.database_url,
         )
+        self.db.register_model("squid_core.models")  # Register core models
 
         self.cli: CLIManager = CLIManager(
             bot=self.bot,
@@ -141,15 +148,18 @@ class Framework:
         )
 
         self.event_bus: EventBus = EventBus()
+        self.perms: Perms = Perms(db=self.db, redis=self.redis)
 
     async def async_init_core_components(self):
         """Asynchronously initialize core components like database, CLI, etc."""
         self.logger.info("Initializing core components...")
-        await self.config.attach_db(self.db)  # Attach DB to config manager
+        await self.config.attach_db(self.db)  # Bind config models
         await self.db.init()
+        await self.redis.connect()
         await self.event_bus.dispatch("framework_core_initialized", framework=self)
 
     async def close_core_components(self):
         """Asynchronously close core components like database, CLI, etc."""
         await self.db.close()
+        await self.redis.disconnect()
         await self.event_bus.dispatch("framework_core_terminated", framework=self)
