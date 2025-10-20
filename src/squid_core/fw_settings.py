@@ -30,6 +30,8 @@ class FWSettings(ConfigSchema):
     # CLI Settings
     cli_prefix: str
     cli_channels: list[int] | None
+    # FS Settings
+    data_dir:str
 
     _options = {
         "name": ConfigOption(
@@ -145,5 +147,12 @@ class FWSettings(ConfigSchema):
             enforce_type=str,
             enforce_type_coerce=True,
             description="The URL for the Redis instance used by the framework.",
-        )
+        ),
+        "data_dir": ConfigOption(
+            name=["filesystem", "data_dir"],
+            default="./data",
+            enforce_type=str,
+            enforce_type_coerce=True,
+            description="Root directory for all framework data storage.",
+        ),
     }

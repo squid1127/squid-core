@@ -25,6 +25,7 @@ class Framework:
         self.settings: FWSettings = (
             settings  # Must be loaded before initialization, asynchronously
         )
+        self.path: Path = settings.data_dir if settings.data_dir else Path("./data")
 
         # Initialize logging
         log_file: Path = (

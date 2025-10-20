@@ -41,6 +41,12 @@ class Plugin(ABC):
         """Shortcut to access the framework instance."""
         return self.framework
 
+    def get_working_directory(self) -> Path:
+        """Get the working directory for this plugin."""
+        base_dir = self.framework.path
+        plugin_dir: Path = base_dir / "plugins" / self.name
+        plugin_dir.mkdir(parents=True, exist_ok=True)
+        return plugin_dir
 
 class PluginComponent(ABC):
     """Abstract base class for components within a plugin, allowing for method decorators."""
@@ -48,7 +54,7 @@ class PluginComponent(ABC):
     def __init__(self, plugin: Plugin) -> None:
         self.plugin = plugin
         self.framework = plugin.framework
-        self.fw = plugin.framework # Shortcut to access the framework instance
+        self.fw = plugin.framework  # Shortcut to access the framework instance
 
 
 class _PluginCogMeta(CogMeta, ABCMeta):
