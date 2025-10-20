@@ -50,8 +50,8 @@ class DMCommandLine(PluginComponent):
         target = context.args[0] if context.args else ""
         if not target:
             await context.respond(
-                "DM Command | Syntax Error",
                 "Please provide a user ID, username, or mention to fetch the DM thread.",
+                title="DM Command | Missing Target",
                 level=EmbedLevel.ERROR,
             )
             return
@@ -63,12 +63,10 @@ class DMCommandLine(PluginComponent):
             try:
                 user = await self.plugin.fw.bot.fetch_user(uid)
             except Exception as e:
-                await context.respond(
-                    "DM Command | Fetch Error",
-                    f"Failed to fetch user with ID {uid}: {e}",
-                    level=EmbedLevel.ERROR,
+                await context.respond_exception(
+                    title=f"DM Command | Fetch Error",
+                    exception=e,
                 )
-                return
         elif target.startswith("<@") and target.endswith(">"):
             # Mention format
             uid_str = target.replace("<@", "").replace("!", "").replace(">", "")
@@ -78,8 +76,8 @@ class DMCommandLine(PluginComponent):
                     user = await self.plugin.fw.bot.fetch_user(uid)
                 except Exception as e:
                     await context.respond(
-                        "DM Command | Fetch Error",
                         f"Failed to fetch user with ID {uid}: {e}",
+                        title="DM Command | Fetch Error",
                         level=EmbedLevel.ERROR,
                     )
                     return
@@ -91,8 +89,8 @@ class DMCommandLine(PluginComponent):
                     break
             if not user:
                 await context.respond(
-                    "DM Command | User Not Found",
                     f"Could not find a user with username '{target}'.",
+                    title="DM Command | User Not Found",
                     level=EmbedLevel.ERROR,
                 )
                 return
@@ -101,14 +99,14 @@ class DMCommandLine(PluginComponent):
         thread = await self.plugin.thread_generator.get_for_user(user)
         if not thread:
             await context.respond(
-                "DM Command | Thread Error",
                 f"Failed to get or create a DM thread for user {user}.",
+                title="DM Command | Error",
                 level=EmbedLevel.ERROR,
             )
             return
         await context.respond(
-            "DM Command | Success",
             f"DM thread for user {user} is available: {thread.mention}",
+            title="DM Command | Success",
             level=EmbedLevel.SUCCESS,
         )
 
