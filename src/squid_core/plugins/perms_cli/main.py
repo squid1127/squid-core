@@ -4,7 +4,7 @@ import discord
 from squid_core.components import Perms, CLIContext, EmbedLevel, PermissionLevel
 from squid_core.plugin_base import Plugin as BasePlugin, PluginCog
 from squid_core.framework import Framework
-from squid_core.decorators import CLICommandDec, RedisSubscribe
+from squid_core.decorators import CLICommandDec
 from squid_core.config_types import ConfigOption
 
 from discord import app_commands
@@ -264,22 +264,6 @@ class PermsCLIPlugin(BasePlugin):
             help_message, title="Permissions CLI Help", level=EmbedLevel.INFO
         )
         return
-    
-    @RedisSubscribe(channel="perms_ban_check")
-    async def handle_ban_check(self, message: dict) -> None:
-        """Handle incoming Redis messages to check user bans.
-
-        Args:
-            message (dict): The Redis message containing user ID to check.
-        """
-        user_id = message.get("user_id")
-        if not user_id:
-            return
-
-        is_banned = await self.perms.is_user_banned(user_id)
-        # Here you would typically publish the result back to a Redis channel
-        # or handle it as needed. This is just a placeholder.
-        self.fw.logger.info(f"Ban check for user {user_id}: {'BANNED' if is_banned else 'NOT BANNED'}")
 
 class PermsCog(PluginCog):
     """A cog for permission management commands."""
