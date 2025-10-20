@@ -110,7 +110,6 @@ class ConfigManager:
         """Attach a database connection for KV store access."""
         self.logger.info("Attaching database connection to ConfigManager")
         self.db = db
-        self.db.register_model("squid_core.config")
 
     async def read_toml(self, path: Path) -> Dict[str, Any]:
         """Read a TOML file and return its contents as a dictionary."""
