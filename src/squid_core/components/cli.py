@@ -156,6 +156,27 @@ class CLIManager:
         for channel in self.get_channels():
             messages.append(await channel.send(embed=embed))
         return messages
+    
+    async def notify_exception(
+        self, title: str, exception: Exception, plugin: str = None
+    ) -> list[discord.Message]:
+        """Send an exception notification to all allowed CLI channels."""
+        context = CLIContext(
+            command=CLICommand(
+                name="notify_exception",
+                aliases=[],
+                description="Exception Notification",
+                execute=lambda x: None,
+                plugin=plugin,
+            ),
+            args=[],
+        )
+        embed = EmbedGenerator.exception(title, exception, context)
+        attachment = EmbedGenerator.exception_attach(exception)
+        messages = []
+        for channel in self.get_channels():
+            messages.append(await channel.send(embed=embed, file=attachment))
+        return messages
 
     def register_command(self, command: CLICommand) -> None:
         """Register a CLI command."""
