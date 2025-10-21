@@ -167,3 +167,6 @@ cython_debug/
 *.sqlite
 *.sqlite3-shm
 *.sqlite3-wal
+
+# Test plugin
+src/squid_core/plugins/testing/*
