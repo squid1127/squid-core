@@ -97,6 +97,7 @@ class UIView:
 
         # Render the view
         await self.render()
+        await self.on_load()
 
     async def init_message(self, message: discord.Message) -> None:
         """Initialize the view with a message."""
@@ -106,12 +107,13 @@ class UIView:
 
         # Render the view
         await self.render()
+        await self.on_load()
         
     #* Destruction Methods
-    async def destroy(self) -> None:
+    async def destroy(self, show_expired: bool = False) -> None:
         """Destroy the UI view."""
         self.view.stop()
-        await self.render(destroy=True)
+        await self.render(destroy=True, show_expired=show_expired)
 
     # * Rendering Methods
     async def render(self, destroy: bool = False, show_expired: bool = True) -> None:
@@ -148,3 +150,8 @@ class UIView:
             await new_view.init_interaction(self._interaction)
         elif self.ui_type == UIType.MESSAGE:
             await new_view.init_message(self._message)
+            
+    #* Subclassing Methods
+    async def on_load(self) -> None:
+        """Called when the view is loaded."""
+        pass
