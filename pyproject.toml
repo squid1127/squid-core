@@ -20,7 +20,8 @@ dependencies = [
     "python-dotenv",
     "coloredlogs",
     "tortoise-orm",
-    "asyncpg",
+    "asyncpg",      # PostgreSQL async driver
+    "aiosqlite",    # SQLite async driver
     "databases[asyncpg]",
 ]
 
