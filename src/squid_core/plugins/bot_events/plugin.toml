@@ -1,0 +1,4 @@
+[plugin]
+name = "bot_events"
+description = "Use the cli channel to send bot events. (Bot joins, startup, etc)"
+class = "BotEventsCLIPlugin"
