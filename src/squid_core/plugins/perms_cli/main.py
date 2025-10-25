@@ -264,6 +264,27 @@ class PermsCLIPlugin(BasePlugin):
             help_message, title="Permissions CLI Help", level=EmbedLevel.INFO
         )
         return
+    
+    @CLICommandDec(
+        name="guilds",
+        description="List all guilds the bot is in.",
+    )
+    async def guilds_command(
+        self,
+        context: CLIContext,
+    ) -> None:
+        """Handle the 'guilds' CLI command.
+
+        Args:
+            context (CLIContext): The CLI command context.
+        """
+        guilds = self.framework.bot.guilds
+        guild_list = "\n".join(f"- {guild.name} (ID: {guild.id}), Owned by {guild.owner.name}" for guild in guilds)
+        await context.respond(
+            f"### Bot Guilds\n{guild_list}",
+            title="Guild List",
+            level=EmbedLevel.INFO,
+        )
 
 class PermsCog(PluginCog):
     """A cog for permission management commands."""
