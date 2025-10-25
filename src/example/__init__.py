@@ -1,1 +1,1 @@
-"""Example bot using the framework."""
+"""Example bot using the framework. Too lazy to find a better place for this."""
