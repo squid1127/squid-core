@@ -6,7 +6,7 @@ A discord.py-based framework for building discord bots, created by squid1127 for
 
 - Modular plugin system for easy extension and customization
 - Built-in utilities including:
-  - Simplified database interactions (Built-in SQLAlchemy support)
+  - Simplified database interactions (Built-in Tortoise ORM support)
   - Redis caching
   - Global Permissions system
   - Event bus
