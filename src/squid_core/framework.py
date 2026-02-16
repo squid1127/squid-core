@@ -1,6 +1,7 @@
 """Core framework class"""
 
-import asyncio
+import asyncio, signal
+import contextlib
 from pathlib import Path
 
 from .bot import Bot
@@ -9,9 +10,17 @@ from .logging import LoggerManager, get_framework_logger
 from .loader import PluginManager
 from .fw_settings import FWSettings
 
-
 class Framework:
-    """A core framework class for bot and utility management."""
+    """
+    A core framework class for bot and utility management.
+    
+    Features:
+    - Graceful shutdown handling for SIGTERM and SIGINT (Docker/Kubernetes compatible)
+    - Plugin system with dynamic loading and unloading
+    - Built-in database, Redis, CLI, event bus, and permissions systems
+    - Comprehensive logging and error handling
+    - Async-first design with synchronous convenience methods
+    """
 
     def __init__(self, config: ConfigManager, settings: FWSettings):
         """
@@ -82,8 +91,27 @@ class Framework:
         return asyncio.run(cls.create_async(manifest=manifest, env_file=env_file))
 
     async def start(self):
-        """Asynchronous start method to launch the framework."""
+        """
+        Asynchronous start method to launch the framework.
+        
+        Handles SIGTERM and SIGINT signals for graceful shutdown (Docker/Kubernetes compatible).
+        The method will run until a signal is received or the bot disconnects.
+        """
         self.logger.info("Starting framework...")
+
+        # Set up signal handlers for graceful shutdown
+        loop = asyncio.get_running_loop()
+        shutdown_event = asyncio.Event()
+        
+        def signal_handler(sig):
+            """Handle shutdown signals (SIGTERM, SIGINT)."""
+            sig_name = signal.Signals(sig).name
+            self.logger.info(f"Received {sig_name} signal. Initiating graceful shutdown...")
+            shutdown_event.set()
+        
+        # Register signal handlers (important for Docker/Kubernetes)
+        for sig in (signal.SIGTERM, signal.SIGINT):
+            loop.add_signal_handler(sig, lambda s=sig: signal_handler(s))
 
         # Initialize and load plugins + core components
         plugins_to_load = self.settings.plugins or ["core:*"]
@@ -98,8 +126,27 @@ class Framework:
         try:
             self.logger.info(f"Starting {self.settings.friendly_name}...")
             await self.event_bus.dispatch("framework_bot_init")
-            await self.bot.start(token=self.settings.bot_token)
-            self.logger.info("Received exit signal. Shutting down...")
+            
+            # Run bot in a task so we can handle shutdown signals
+            bot_task = asyncio.create_task(self.bot.start(token=self.settings.bot_token))
+            shutdown_task = asyncio.create_task(shutdown_event.wait())
+            
+            # Wait for either bot to finish or shutdown signal
+            done, pending = await asyncio.wait(
+                [bot_task, shutdown_task],
+                return_when=asyncio.FIRST_COMPLETED
+            )
+            
+            # Cancel pending tasks
+            for task in pending:
+                task.cancel()
+                with contextlib.suppress(asyncio.CancelledError):
+                    await task
+            
+            self.logger.info("Shutting down...")
+        except Exception as e:
+            self.logger.error(f"Error during framework execution: {e}", exc_info=True)
+            raise
         finally:
             await self.teardown()
 
@@ -107,25 +154,43 @@ class Framework:
         """Asynchronous teardown method to clean up resources."""
         self.logger.info("Tearing down framework...")
 
-        # Unload all plugins first
-        await self.plugins.unload_all()
+        try:
+            # Dispatch pre-shutdown event
+            await self.event_bus.dispatch("framework_pre_shutdown")
+            
+            # Unload all plugins first
+            await self.plugins.unload_all()
 
-        # Close bot connection
-        await self.bot.close()
+            # Close bot connection gracefully
+            if not self.bot.is_closed():
+                await self.bot.close()
 
-        # Close core components
-        await self.close_core_components()
+            # Close core components
+            await self.close_core_components()
 
-        # Shutdown logging
-        self.logger_manager.shutdown()
-        self.logger.info("Framework shut down successfully.")
+            self.logger.info("Framework shut down successfully.")
+        except Exception as e:
+            self.logger.error(f"Error during teardown: {e}", exc_info=True)
+        finally:
+            # Shutdown logging last
+            self.logger_manager.shutdown()
 
     def run(self):
-        """Synchronous start method to launch the framework."""
+        """
+        Synchronous entry point to launch the framework.
+        
+        This is the main method to call from your application's entry point.
+        Handles signals gracefully and ensures proper cleanup on exit.
+        Compatible with Docker, Kubernetes, and standard process managers.
+        """
         try:
             asyncio.run(self.start())
         except KeyboardInterrupt:
-            self.logger.warning("Keyboard interrupt received")
+            # This shouldn't normally be reached due to signal handlers, but kept as fallback
+            self.logger.info("Keyboard interrupt received")
+        except Exception as e:
+            self.logger.error(f"Fatal error: {e}", exc_info=True)
+            raise
 
     # "Core components" initialization methods
     def init_core_components(self):
@@ -164,6 +229,24 @@ class Framework:
 
     async def close_core_components(self):
         """Asynchronously close core components like database, CLI, etc."""
-        await self.db.close()
-        await self.redis.disconnect()
-        await self.event_bus.dispatch("framework_core_terminated", framework=self)
+        # Close each component independently to prevent one failure from blocking others
+        close_tasks = []
+        
+        if self.db:
+            close_tasks.append(("Database", self.db.close()))
+        if self.redis:
+            close_tasks.append(("Redis", self.redis.disconnect()))
+        
+        # Execute all close operations
+        for name, task in close_tasks:
+            try:
+                await task
+                self.logger.debug(f"{name} closed successfully")
+            except Exception as e:
+                self.logger.error(f"Error closing {name}: {e}", exc_info=True)
+        
+        # Dispatch termination event
+        try:
+            await self.event_bus.dispatch("framework_core_terminated", framework=self)
+        except Exception as e:
+            self.logger.error(f"Error dispatching termination event: {e}", exc_info=True)
