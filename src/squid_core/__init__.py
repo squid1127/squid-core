@@ -10,3 +10,17 @@ from .framework import Framework
 from .logging import LoggerManager, get_framework_logger
 from .plugin_base import Plugin, PluginComponent, PluginCog
 from .config import ConfigManager, ConfigSchema, ConfigOption
+from .bot import Bot
+
+_all__ = [
+    "Framework",
+    "LoggerManager",
+    "get_framework_logger",
+    "Plugin",
+    "PluginComponent",
+    "PluginCog",
+    "ConfigManager",
+    "ConfigSchema",
+    "ConfigOption",
+    "Bot",
+]
