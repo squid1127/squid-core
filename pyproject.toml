@@ -23,7 +23,7 @@ dependencies = [
     "asyncpg",      # PostgreSQL async driver
     "aiosqlite",    # SQLite async driver
     "databases[asyncpg]",
-    "typer[all] (>=0.24.1,<0.25.0)",
+    "typer[all] (>=0.24.1,<0.26.0)",
     "aerich (>=0.9.2,<0.10.0)",
 ]
 
