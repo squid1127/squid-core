@@ -27,6 +27,7 @@ class FWSettings(ConfigSchema):
     # Database Settings
     database_url: str | None
     redis_url: str | None
+    use_aerich: bool
     # CLI Settings
     cli_prefix: str
     cli_channels: list[int] | None
@@ -147,6 +148,13 @@ class FWSettings(ConfigSchema):
             enforce_type=str,
             enforce_type_coerce=True,
             description="The URL for the Redis instance used by the framework.",
+        ),
+        "use_aerich": ConfigOption(
+            name=["database", "aerich"],
+            default=True,
+            enforce_type=bool,
+            enforce_type_coerce=True,
+            description="Enable Aerich for database migrations.",
         ),
         "data_dir": ConfigOption(
             name=["filesystem", "data_dir"],

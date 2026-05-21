@@ -207,6 +207,7 @@ class Framework:
 
         self.db: Database = Database(
             url=self.settings.database_url,
+            aerich=self.settings.use_aerich
         )
         self.db.register_model("squid_core.models")  # Register core models
 
