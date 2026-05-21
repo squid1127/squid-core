@@ -8,7 +8,6 @@ from squid_core.decorators import DiscordEventListener, FwEventListener
 class BotEventsCLIPlugin(BasePlugin):
     """A plugin for sending bot events through the CLI."""
 
-
     def __init__(self, framework: Framework):
         super().__init__(framework)
         
@@ -26,7 +25,7 @@ class BotEventsCLIPlugin(BasePlugin):
             
     async def load(self):
         """Load the plugin."""
-        pass # Requried by ABC but nothing to do here.
+        pass # Required by ABC but nothing to do here.
     async def unload(self):
         """Unload the plugin."""
         pass
