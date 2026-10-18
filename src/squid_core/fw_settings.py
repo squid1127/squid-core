@@ -102,6 +102,7 @@ class FWSettings(ConfigSchema):
             name=["plugins", "plugins"],
             default=None,
             enforce_type=list,
+            enforce_type_coerce=True,
             description="A list of plugins to load at framework startup.",
         ),
         "plugins_packages": ConfigOption(
@@ -109,6 +110,7 @@ class FWSettings(ConfigSchema):
             default=None,
             sources=[ConfigSource.MANIFEST_GLOBAL, ConfigSource.DEFAULT], # Required for plugin module discovery | Defined in global manifest
             enforce_type=dict,
+            enforce_type_coerce=True,
             description="A mapping of plugin package names to their module paths.",
         ),
         "plugins_package_core": ConfigOption(
